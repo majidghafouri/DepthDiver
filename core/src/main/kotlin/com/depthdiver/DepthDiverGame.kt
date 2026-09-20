@@ -3,6 +3,7 @@ package com.depthdiver
 import com.badlogic.gdx.ApplicationAdapter
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
+import com.badlogic.gdx.Preferences
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.OrthographicCamera
@@ -32,6 +33,10 @@ class DepthDiverGame : ApplicationAdapter() {
     private val pickups = mutableListOf<Pickup>()
     private var state: GameState = GameState.PLAYING
 
+    private lateinit var prefs: Preferences
+    private var bestDepth = 0f
+    private var bestScore = 0
+
     private var playerX = 0f
     private var playerY = 0f
     private var depth = 0f
@@ -52,6 +57,9 @@ class DepthDiverGame : ApplicationAdapter() {
         camera = OrthographicCamera()
         resize(Gdx.graphics.width, Gdx.graphics.height)
         font = BitmapFont()
+        prefs = Gdx.app.getPreferences("depthdiver")
+        bestDepth = prefs.getFloat("bestDepth", 0f)
+        bestScore = prefs.getInteger("bestScore", 0)
 
         val playerPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
         playerPix.setColor(0.2f, 0.75f, 1f, 1f)
@@ -178,6 +186,18 @@ class DepthDiverGame : ApplicationAdapter() {
         }
         if (oxygen <= 0f) {
             state = GameState.GAME_OVER
+        }
+
+        if (depth > bestDepth) {
+            bestDepth = depth
+            prefs.putFloat("bestDepth", bestDepth)
+        }
+        if (score > bestScore) {
+            bestScore = score
+            prefs.putInteger("bestScore", bestScore)
+        }
+        if (state == GameState.GAME_OVER) {
+            prefs.flush()
         }
     }
 
@@ -321,6 +341,7 @@ class DepthDiverGame : ApplicationAdapter() {
         font.color = Color.WHITE
         font.draw(batch, "DEPTH: ${depth.toInt()} m", 10f, worldHeight - 14f)
         font.draw(batch, "SCORE: $score", 150f, worldHeight - 14f)
+        font.draw(batch, "BEST: ${bestDepth.toInt()} m / $bestScore", 260f, worldHeight - 14f)
         font.draw(batch, "OXYGEN: ${(oxygen * 100).toInt()}%", 10f, worldHeight - 34f)
         if (state == GameState.GAME_OVER) {
             font.color = Color.RED
@@ -329,6 +350,13 @@ class DepthDiverGame : ApplicationAdapter() {
                 "GAME OVER - press R to restart",
                 worldWidth / 2f - 140f,
                 worldHeight / 2f
+            )
+            font.color = Color.GOLD
+            font.draw(
+                batch,
+                "BEST DEPTH: ${bestDepth.toInt()} m   HIGH SCORE: $bestScore",
+                worldWidth / 2f - 180f,
+                worldHeight / 2f - 22f
             )
         }
         batch.end()
