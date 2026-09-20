@@ -12,6 +12,8 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
+import com.depthdiver.entity.Hazard
+import com.depthdiver.entity.Pickup
 import kotlin.math.max
 
 class DepthDiverGame : ApplicationAdapter() {
@@ -21,10 +23,13 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var font: BitmapFont
     private lateinit var playerTex: Texture
     private lateinit var rockTex: Texture
-    private lateinit var treasureTex: Texture
+    private lateinit var mineTex: Texture
+    private lateinit var jellyfishTex: Texture
+    private lateinit var pearlTex: Texture
+    private lateinit var oxyTex: Texture
 
-    private val rocks = mutableListOf<Rock>()
-    private val treasures = mutableListOf<Treasure>()
+    private val hazards = mutableListOf<Hazard>()
+    private val pickups = mutableListOf<Pickup>()
     private var state: GameState = GameState.PLAYING
 
     private var playerX = 0f
@@ -33,8 +38,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var score = 0
     private var oxygen = 1f
     private var elapsed = 0f
-    private var rockTimer = 0f
-    private var treasureTimer = 0f
+    private var hazardTimer = 1f
+    private var pickupTimer = 2f
 
     private val playerSpeed = 320f
     private val playerRadius = 18f
@@ -64,13 +69,50 @@ class DepthDiverGame : ApplicationAdapter() {
         rockTex = Texture(rockPix)
         rockPix.dispose()
 
-        val treasurePix = Pixmap(32, 32, Pixmap.Format.RGBA8888)
-        treasurePix.setColor(1f, 0.85f, 0.2f, 1f)
-        treasurePix.fillCircle(16, 16, 12)
-        treasurePix.setColor(1f, 0.95f, 0.5f, 1f)
-        treasurePix.fillCircle(16, 16, 5)
-        treasureTex = Texture(treasurePix)
-        treasurePix.dispose()
+        val minePix = Pixmap(48, 48, Pixmap.Format.RGBA8888)
+        minePix.setColor(0.15f, 0.15f, 0.22f, 1f)
+        minePix.fillCircle(24, 24, 15)
+        minePix.setColor(0.1f, 0.1f, 0.16f, 1f)
+        minePix.drawLine(24, 38, 24, 46)
+        minePix.drawLine(24, 10, 24, 2)
+        minePix.drawLine(38, 24, 46, 24)
+        minePix.drawLine(10, 24, 2, 24)
+        minePix.drawLine(34, 34, 41, 41)
+        minePix.drawLine(14, 14, 7, 7)
+        minePix.drawLine(34, 14, 41, 7)
+        minePix.drawLine(14, 34, 7, 41)
+        minePix.setColor(0.9f, 0.2f, 0.15f, 1f)
+        minePix.fillCircle(24, 24, 6)
+        mineTex = Texture(minePix)
+        minePix.dispose()
+
+        val jellyPix = Pixmap(48, 48, Pixmap.Format.RGBA8888)
+        jellyPix.setColor(0.7f, 0.9f, 1f, 0.85f)
+        jellyPix.fillCircle(24, 40, 17)
+        jellyPix.setColor(0.6f, 0.8f, 1f, 0.8f)
+        jellyPix.drawLine(18, 28, 15, 8)
+        jellyPix.drawLine(24, 26, 24, 6)
+        jellyPix.drawLine(30, 28, 33, 8)
+        jellyfishTex = Texture(jellyPix)
+        jellyPix.dispose()
+
+        val pearlPix = Pixmap(24, 24, Pixmap.Format.RGBA8888)
+        pearlPix.setColor(0.95f, 0.9f, 0.82f, 1f)
+        pearlPix.fillCircle(12, 12, 9)
+        pearlPix.setColor(1f, 1f, 1f, 0.8f)
+        pearlPix.fillCircle(9, 15, 3)
+        pearlTex = Texture(pearlPix)
+        pearlPix.dispose()
+
+        val oxyPix = Pixmap(32, 32, Pixmap.Format.RGBA8888)
+        oxyPix.setColor(0.3f, 0.3f, 0.3f, 1f)
+        oxyPix.fillRectangle(12, 24, 8, 4)
+        oxyPix.setColor(0.1f, 0.75f, 0.2f, 1f)
+        oxyPix.fillRectangle(10, 21, 12, 4)
+        oxyPix.setColor(0.9f, 0.9f, 0.88f, 1f)
+        oxyPix.fillRectangle(8, 4, 16, 18)
+        oxyTex = Texture(oxyPix)
+        oxyPix.dispose()
 
         reset()
     }
@@ -87,54 +129,129 @@ class DepthDiverGame : ApplicationAdapter() {
         draw()
     }
 
+    override fun dispose() {
+        batch.dispose()
+        font.dispose()
+        playerTex.dispose()
+        rockTex.dispose()
+        mineTex.dispose()
+        jellyfishTex.dispose()
+        pearlTex.dispose()
+        oxyTex.dispose()
+    }
+
     private fun update(delta: Float) {
         if (state != GameState.PLAYING) return
         elapsed += delta
         oxygen -= delta * 0.02f
         depth = max(depth, (worldHeight - max(playerY, playerRadius)) / pixelsPerMeter)
 
-        rockTimer -= delta
-        if (rockTimer <= 0) {
-            spawnRock()
-            rockTimer = MathUtils.random(1.2f, 2.4f)
+        val difficulty = (depth / 40f).coerceAtLeast(0f)
+        val scrollSpeed = 90f + difficulty * 40f
+
+        hazardTimer -= delta
+        if (hazardTimer <= 0) {
+            spawnHazard()
+            hazardTimer = MathUtils.random(1.4f, 2.6f) / (1f + difficulty * 0.6f)
         }
-        treasureTimer -= delta
-        if (treasureTimer <= 0) {
-            spawnTreasure()
-            treasureTimer = MathUtils.random(3f, 6f)
+        pickupTimer -= delta
+        if (pickupTimer <= 0) {
+            spawnPickup()
+            pickupTimer = MathUtils.random(3f, 5.5f)
         }
 
-        val speed = 140f + elapsed * 4f
-        val itrR = rocks.iterator()
-        while (itrR.hasNext()) {
-            val rock = itrR.next()
-            rock.rect.y -= speed * delta
-            rock.rect.x += MathUtils.sin(elapsed * 2f + rock.phase) * 10f * delta
-            if (rock.rect.y + rock.rect.height < 0f) itrR.remove()
-        }
-        val itrT = treasures.iterator()
-        while (itrT.hasNext()) {
-            val treasure = itrT.next()
-            treasure.rect.y -= speed * 0.6f * delta
-            if (treasure.rect.y + treasure.rect.height < 0f || treasure.collected) {
-                itrT.remove()
-            }
-        }
+        updateEntities(delta, scrollSpeed)
 
-        for (rock in rocks) {
-            if (playerRect().overlaps(rock.rect)) {
+        for (hazard in hazards) {
+            if (playerRect().overlaps(hazard.rect)) {
                 state = GameState.GAME_OVER
             }
         }
-        for (treasure in treasures) {
-            if (!treasure.collected && playerRect().overlaps(treasure.rect)) {
-                treasure.collected = true
-                score += 10
-                oxygen = (oxygen + 0.25f).coerceAtMost(1f)
+        for (pickup in pickups) {
+            if (!pickup.collected && playerRect().overlaps(pickup.rect)) {
+                pickup.collected = true
+                when (pickup) {
+                    is Pickup.OxygenTank -> oxygen = (oxygen + 0.4f).coerceAtMost(1f)
+                    is Pickup.Pearl -> score += 5
+                }
             }
         }
         if (oxygen <= 0f) {
             state = GameState.GAME_OVER
+        }
+    }
+
+    private fun updateEntities(delta: Float, scrollSpeed: Float) {
+        val itr = hazards.iterator()
+        while (itr.hasNext()) {
+            val hazard = itr.next()
+            when (hazard) {
+                is Hazard.Rock -> {
+                    hazard.rect.y -= scrollSpeed * delta
+                    hazard.rect.x += MathUtils.sin(elapsed * 2f + hazard.phase) * 10f * delta
+                }
+                is Hazard.Mine -> {
+                    hazard.rect.y -= scrollSpeed * 0.6f * delta
+                    hazard.rect.x += MathUtils.sin(elapsed * 1.2f + hazard.phase) * 24f * delta
+                }
+                is Hazard.Jellyfish -> {
+                    hazard.rect.y -= scrollSpeed * 0.45f * delta
+                    hazard.rect.x = hazard.baseX + MathUtils.sin(elapsed * 1.5f + hazard.phase) * hazard.sway
+                }
+            }
+            if (hazard.rect.y + hazard.rect.height < 0f ||
+                hazard.rect.x + hazard.rect.width < 0f ||
+                hazard.rect.x > worldWidth
+            ) {
+                itr.remove()
+            }
+        }
+        val itrP = pickups.iterator()
+        while (itrP.hasNext()) {
+            val pickup = itrP.next()
+            pickup.rect.y -= scrollSpeed * 0.55f * delta
+            pickup.rect.x += MathUtils.sin(elapsed * 1.1f + pickup.phase) * 8f * delta
+            if (pickup.rect.y + pickup.rect.height < 0f || pickup.collected) {
+                itrP.remove()
+            }
+        }
+    }
+
+    private fun spawnHazard() {
+        val roll = MathUtils.random()
+        val x = MathUtils.random(0f, (worldWidth - 80f).coerceAtLeast(0f))
+        when {
+            roll < 0.3f -> {
+                hazards.add(Hazard.Rock(Rectangle(-24f, worldHeight + 40f, 96f, 120f), 0f))
+                hazards.add(Hazard.Rock(Rectangle(worldWidth - 72f, worldHeight + 40f, 96f, 120f), 0f))
+            }
+            depth > 35f && roll < 0.55f -> {
+                hazards.add(
+                    Hazard.Jellyfish(
+                        Rectangle(x, worldHeight + 60f, 60f, 60f),
+                        MathUtils.random(0f, MathUtils.PI2),
+                        MathUtils.random(25f, 45f),
+                        x
+                    )
+                )
+            }
+            depth > 18f && roll < 0.8f -> {
+                hazards.add(Hazard.Mine(Rectangle(x, worldHeight + 48f, 48f, 48f), MathUtils.random(0f, MathUtils.PI2)))
+            }
+            else -> {
+                val size = MathUtils.random(45f, 85f)
+                hazards.add(Hazard.Rock(Rectangle(x, worldHeight + 80f, size, size), MathUtils.random(0f, MathUtils.PI2)))
+            }
+        }
+    }
+
+    private fun spawnPickup() {
+        val x = MathUtils.random(0f, (worldWidth - 40f).coerceAtLeast(0f))
+        val phase = MathUtils.random(0f, MathUtils.PI2)
+        if (MathUtils.random() < 0.65f) {
+            pickups.add(Pickup.Pearl(Rectangle(x, worldHeight + 40f, 24f, 24f), phase))
+        } else {
+            pickups.add(Pickup.OxygenTank(Rectangle(x, worldHeight + 48f, 32f, 32f), phase))
         }
     }
 
@@ -178,16 +295,21 @@ class DepthDiverGame : ApplicationAdapter() {
         batch.projectionMatrix = camera.combined
         batch.begin()
 
-        for (rock in rocks) {
-            batch.setColor(1f, 1f, 1f, 1f)
-            batch.draw(rockTex, rock.rect.x, rock.rect.y, rock.rect.width, rock.rect.height)
+        batch.setColor(1f, 1f, 1f, 1f)
+        for (hazard in hazards) {
+            val tex = when (hazard) {
+                is Hazard.Rock -> rockTex
+                is Hazard.Mine -> mineTex
+                is Hazard.Jellyfish -> jellyfishTex
+            }
+            batch.draw(tex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
         }
-        for (treasure in treasures) {
-            batch.setColor(1f, 1f, 1f, 1f)
-            batch.draw(treasureTex, treasure.rect.x, treasure.rect.y)
+        for (pickup in pickups) {
+            if (pickup.collected) continue
+            val tex = if (pickup is Pickup.OxygenTank) oxyTex else pearlTex
+            batch.draw(tex, pickup.rect.x, pickup.rect.y, pickup.rect.width, pickup.rect.height)
         }
 
-        batch.setColor(1f, 1f, 1f, 1f)
         batch.draw(
             playerTex,
             playerX - playerRadius,
@@ -212,17 +334,6 @@ class DepthDiverGame : ApplicationAdapter() {
         batch.end()
     }
 
-    private fun spawnRock() {
-        val size = MathUtils.random(45f, 85f)
-        val x = MathUtils.random(0f, worldWidth - size)
-        rocks.add(Rock(Rectangle(x, worldHeight + size, size, size), MathUtils.random(0f, MathUtils.PI2)))
-    }
-
-    private fun spawnTreasure() {
-        val x = MathUtils.random(0f, worldWidth - 32f)
-        treasures.add(Treasure(Rectangle(x, worldHeight + 32f, 32f, 32f)))
-    }
-
     private fun playerRect() =
         Rectangle(playerX - playerRadius, playerY - playerRadius, playerRadius * 2f, playerRadius * 2f)
 
@@ -233,22 +344,12 @@ class DepthDiverGame : ApplicationAdapter() {
         score = 0
         oxygen = 1f
         elapsed = 0f
-        rockTimer = 1f
-        treasureTimer = 2f
-        rocks.clear()
-        treasures.clear()
+        hazardTimer = 1f
+        pickupTimer = 2f
+        hazards.clear()
+        pickups.clear()
         state = GameState.PLAYING
     }
 
-    override fun dispose() {
-        batch.dispose()
-        font.dispose()
-        playerTex.dispose()
-        rockTex.dispose()
-        treasureTex.dispose()
-    }
-
-    private data class Rock(val rect: Rectangle, val phase: Float)
-    private data class Treasure(val rect: Rectangle, var collected: Boolean = false)
     private enum class GameState { PLAYING, GAME_OVER }
 }
