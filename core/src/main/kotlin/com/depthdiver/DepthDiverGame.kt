@@ -153,10 +153,20 @@ class DepthDiverGame : ApplicationAdapter() {
         if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1f
         if (Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1f
 
-        if (dx != 0f && dy != 0f) {
-            val inv = 0.70710678f
-            dx *= inv
-            dy *= inv
+        if (dx != 0f || dy != 0f) {
+            val len = kotlin.math.sqrt(dx * dx + dy * dy)
+            dx /= len
+            dy /= len
+        } else if (Gdx.input.isTouched()) {
+            val touchX = Gdx.input.x.toFloat()
+            val touchY = Gdx.graphics.height.toFloat() - Gdx.input.y.toFloat()
+            val toX = touchX - playerX
+            val toY = touchY - playerY
+            val dist = kotlin.math.sqrt(toX * toX + toY * toY)
+            if (dist > playerRadius + 8f) {
+                dx = toX / dist
+                dy = toY / dist
+            }
         }
         playerX = (playerX + dx * playerSpeed * delta).coerceIn(playerRadius, worldWidth - playerRadius)
         playerY = (playerY + dy * playerSpeed * delta).coerceIn(playerRadius, worldHeight - playerRadius)
