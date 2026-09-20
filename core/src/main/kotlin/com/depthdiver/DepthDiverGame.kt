@@ -33,6 +33,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private val pickups = mutableListOf<Pickup>()
     private var state: GameState = GameState.PLAYING
 
+    private val audio = AudioManager()
+
     private lateinit var prefs: Preferences
     private var bestDepth = 0f
     private var bestScore = 0
@@ -60,6 +62,7 @@ class DepthDiverGame : ApplicationAdapter() {
         prefs = Gdx.app.getPreferences("depthdiver")
         bestDepth = prefs.getFloat("bestDepth", 0f)
         bestScore = prefs.getInteger("bestScore", 0)
+        audio.init()
 
         val playerPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
         playerPix.setColor(0.2f, 0.75f, 1f, 1f)
@@ -146,6 +149,7 @@ class DepthDiverGame : ApplicationAdapter() {
         jellyfishTex.dispose()
         pearlTex.dispose()
         oxyTex.dispose()
+        audio.dispose()
     }
 
     private fun update(delta: Float) {
@@ -172,20 +176,26 @@ class DepthDiverGame : ApplicationAdapter() {
 
         for (hazard in hazards) {
             if (playerRect().overlaps(hazard.rect)) {
-                state = GameState.GAME_OVER
+                endGame()
             }
         }
         for (pickup in pickups) {
             if (!pickup.collected && playerRect().overlaps(pickup.rect)) {
                 pickup.collected = true
                 when (pickup) {
-                    is Pickup.OxygenTank -> oxygen = (oxygen + 0.4f).coerceAtMost(1f)
-                    is Pickup.Pearl -> score += 5
+                    is Pickup.OxygenTank -> {
+                        oxygen = (oxygen + 0.4f).coerceAtMost(1f)
+                        audio.playOxygen()
+                    }
+                    is Pickup.Pearl -> {
+                        score += 5
+                        audio.playPickup()
+                    }
                 }
             }
         }
         if (oxygen <= 0f) {
-            state = GameState.GAME_OVER
+            endGame()
         }
 
         if (depth > bestDepth) {
@@ -364,6 +374,13 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun playerRect() =
         Rectangle(playerX - playerRadius, playerY - playerRadius, playerRadius * 2f, playerRadius * 2f)
+
+    private fun endGame() {
+        if (state == GameState.PLAYING) {
+            state = GameState.GAME_OVER
+            audio.playCrash()
+        }
+    }
 
     private fun reset() {
         playerX = worldWidth / 2f
