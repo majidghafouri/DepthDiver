@@ -2,160 +2,143 @@
 
 # 🐬 Depth Diver
 
-**A subaquatic endless-diver built with [libGDX]**  
-Dive deep, grab pearls, grab air — and come back up before your oxygen runs out.
+**A subaquatic endless-diving game built with [libGDX] and Kotlin.**
+
+Plunge into the abyss, dodge hazards, scoop up pearls and oxygen tanks — and
+surface before your air runs out. Runs on **Android** and **desktop (LWJGL3)**.
 
 </div>
 
 ---
 
-## About the game
+## 🎮 What is it?
 
-**Depth Diver** is a small, self-contained 2D game where you pilot a diver straight
-down into the abyss. It's a side-scrolling endless runner in the spirit of *Faster
-Than Light meets Subnautica's lower leagues* — the deeper you go, the faster the
-world scrolls, the longer the oxygen line shrinks.
+**Depth Diver** is a 2D side-scrolling "diver" game: you steer a diver down a
+procedurally scrolling underwater world where **the deeper you go, the harder it
+gets** — and your **oxygen is always draining**.
 
-### Gameplay
+| Concept | In practice |
+|---------|-------------|
+| 🕹️ Steering | `WASD` / arrows (Kotlin `Gdx.input.isKeyPressed`) + touch drag (`Gdx.input.isTouched`) on Android |
+| 🫁 Oxygen | Drains faster with depth; die if it hits zero |
+| 💎 Pickups | **Pearls** (score) and **oxygen tanks** (restore air) |
+| ⚠️ Hazards | **Rocks**, **mines**, and **jellyfish** — one touch and it's lights out |
+| 📈 Depth = difficulty | Enemy/pickup density & scroll speed ramp as you dive deeper |
+| 🏆 Persistence | Best depth + best score saved via libGDX `Preferences` |
 
-- 🕹️ **Steer** with `WASD` / arrow keys on desktop, `touch & drag` on Android
-  (the diver follows your finger — the game world scrolls past you).
-- 🫁 **Oxygen** drains the deeper you dive. Run out and you sink to the bottom.
-- 🦪 **Pearls** (score) and 🫧 **Oxygen tanks** (restore air) float past — grab them.
-- 🪨 **Rocks**, 💣 **mines**, and 🪼 **jellyfish** end your dive. Bob to dodge.
-- 📈 **Depth = difficulty.** Deeper = faster scroll, tighter gaps, hungrier hazards.
-- 🏆 **Best depth & best score** are saved between sessions.
-
-### Highlights
-
-- **100% procedural content** — every texture is generated at runtime with
-  `Pixmap`; there are **no binary art assets** in the repo.
-- **Procedural audio** — sound effects are synthesized on the fly into WAV files
-  by `AudioManager` (bubbles, pearls, oxygen hiss, explosion) — again, no audio
-  assets checked in.
-- **Shared core + two launchers** — one game, runs on desktop and Android from a
-  single source tree.
+The whole game is **procedurally generated at runtime** — textures via
+`Pixmap` and all sound effects synthesized on the fly (no binary art/audio
+assets to license).
 
 ---
 
-## Tech stack
+## 🧱 Project layout
 
-Built with the **Kotlin** Multiplatform-style layout that libGDX officially
-recommends — *one shared game module, thin platform launchers*:
-
-| Layer | Technology |
-|-------|-----------|
-| Game engine | **[libGDX](https://libgdx.com)** 1.14.2 — `ApplicationAdapter`, `SpriteBatch`, `OrthographicCamera`, `ShapeRenderer`, `Pixmap`, procedurally generated `Texture` & `Sound` |
-| Language | **[Kotlin](https://kotlinlang.org)** 2.2.20 |
-| Android | **[Android Gradle Plugin](https://developer.android.com/build)** 9.4.1, `gdx-backend-android`, classifier `gdx-platform:natives-*` (AGP auto-splits `.so` per ABI) |
-| Desktop | **LWJGL3** via `gdx-backend-lwjgl3` + `gdx-platform:natives-desktop`, Gradle `application` plugin run task |
-| UI (Android) | **[Material Design](https://m3.material.io)** (`com.google.android.material`) |
-| Build | **[Gradle](https://gradle.org)** Kotlin DSL + version catalog (`libs.versions.toml`), **configuration cache** enabled |
-| JVM | Java 11 toolchain (`JvmTarget.JVM_11` on Android, toolchain 17 on desktop) |
-
-### Module layout
+libGDX-style **multi-module Kotlin** project:
 
 ```
 DepthDiver/
-├─ core/       # platform-agnostic game logic (the whole game lives here)
-├─ desktop/    # LWJGL3 launcher — "run" target for quick dev loop
-├─ app/        # Android application module (backend-android + natives jar)
-└─ gradle/     # version catalog (libs.versions.toml)
+├── core/        # Everything that makes the game a game (Kotlin, engine-agnostic-ish libGDX)
+│   └── com/depthdiver/
+│       ├── DepthDiverGame.kt      # main ApplicationAdapter — game loop
+│       ├── AudioManager.kt        # procedural WAV synthesizer (pickup/oxygen/crash SFX)
+│       └── entity/                # Pickup (Pearl, OxygenTank), Hazard (Rock, Mine, Jellyfish)
+├── desktop/     # LWJGL3 launcher (gdx-backend-lwjgl3 + gdx-platform natives)
+├── app/         # Android launcher (gdx-backend-android) — runs on emulator/device
+├── gradle/      # version catalog (libs.versions.toml) — all versions pinned here
+└── settings.gradle.kts
 ```
 
-The host package for the game itself is `com.depthdiver` (`DepthDiverGame`,
-`AudioManager`, entities, hazards, pickups). Launchers are thin and live in
-their own modules.
+**Package conventions:** game domain lives in `com.depthdiver` (core); the
+Android entry point is `app.depthdiver.AndroidLauncher`; the desktop entry
+point is `com.depthdiver.desktop.DesktopLauncherKt`.
 
 ---
 
-## Prerequisites
+## 🛠️ Tech used
 
-- **JDK 17** (used by the Gradle daemon / desktop toolchain)
-- **Android SDK** with an emulator (AVD) or a device — for the `app` target
-- A terminal. That's it — no IDE required to build.
+| Concern | Technology |
+|---------|-----------|
+| Game framework | **[libGDX](https://libgdx.com) 1.12.1** — `ApplicationAdapter`, `SpriteBatch`, `ShapeRenderer`, `Pixmap`, `OrthographicCamera`, `Gdx.input` |
+| Game backend (Android) | `gdx-backend-android` + `gdx-platform` `natives-*` classifier jars (so the `libgdx.so` natives are packaged per ABI) |
+| Game backend (desktop) | `gdx-backend-lwjgl3` + `gdx-platform:natives-desktop` |
+| Platform | **Kotlin** + Gradle Kotlin DSL, AGP via version catalog |
+| UI | libGDX's own `BitmapFont` HUD (system-drawn) — no third-party UI |
+| Build | Gradle wrapper, [version catalog](gradle/libs.versions.toml), configuration-cache-friendly |
+| Target SDKs | Android `minSdk 24` / `targetSdk 37`, Java 11 source-level |
 
-> Desktop runs need **nothing extra** — it just needs a JDK.
+There is **no unused dependency**: the catalog was pruned of the stock
+appcompat / core-ktx / junit / espresso entries that the Android Studio
+template ships but this project doesn't use. `Material` is only referenced by
+the Android theme.
 
 ---
 
-## Setup & run
+## 🚀 Getting started
 
-### 1. Clone
+### Prerequisites
 
-```bash
-git clone <your-repo-url> DepthDiver
-cd DepthDiver
-```
+- **JDK 17+** (`JAVA_HOME` set)
+- **Android SDK** (for the `app` module) with an AVD or device
+- Nothing else — no node, no binary assets
 
-### 2. Desktop (fastest — no Android needed)
+### Desktop (fastest way to play)
 
 ```bash
 ./gradlew :desktop:run
 ```
 
-That's the whole game, in a window, in under a minute. (Uses LWJGL3; the project
-already sets `-XstartOnFirstThread` on macOS, so it runs out of the box on a Mac.)
+This launches the LWJGL3 window with procedural audio — perfect for iterating on
+gameplay without an emulator.
 
-### 3. Android
-
-Create/start an AVD if you don't have one, then:
+### Android
 
 ```bash
-./gradlew :app:assembleDebug
+./gradlew :app:assembleDebug                # build the APK
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n app.depthdiver/.AndroidLauncher
 ```
 
-> The APK ships `libgdx.so` for all four ABIs (`armeabi-v7a`, `arm64-v8a`, `x86`,
-> `x86_64`) via the `gdx-platform` **natives classifier** jars — no manual
-> `jniLibs` copying, no `UnsatisfiedLinkError`s.
-
-### 4. Customize in Android Studio
-
-Open the root folder as a Gradle project. Sync, then:
-
-- **Desktop:** run `desktop.mainClass` (the `:desktop:run` task) — green ▶.
-- **Android:** select the `app` configuration and run it on your emulator.
-- Set a device/emulator up via **Device Manager** if you haven't yet.
+> **Why the APK has `libgdx.so`:** libGDX ships its Android natives as
+> `com.badlogicgames.gdx:gdx-platform:<ver>:natives-<abi>` **classifier
+> dependencies**. The old template replaced these with a fragile
+> `copyAndroidNatives` task that broke the Gradle configuration cache and
+> dropped the natives from the APK (crash: *Couldn't load shared library
+> 'gdx'*). This project declares the four classifier deps directly — the AGP
+> `natives`/`implementation` mechanism auto-packs `lib/<abi>/libgdx.so` into
+> the APK. No manual jniLibs copying needed.
 
 ---
 
-## Controls
+## 🕹️ Controls
 
 | Action | Desktop | Android |
 |--------|---------|---------|
-| Steer | `WASD` / arrow keys | touch & drag |
-| Dive / surface | `W` / `S` (or hold on-screen) | drag up / down |
-| Restart after sinking | `R` | tap |
+| Move up / down / left / right | `WASD` or arrow keys | **touch & drag** (`isTouched`) |
+| Restart (after sinking) | `R` | touch |
+| Quit | `ESC` / window close | system back |
 
 ---
 
-## How the project ticks
+## 🧪 Development notes
 
-- **`core/`** — `DepthDiverGame` extends `libGDX.ApplicationAdapter` and owns the
-  whole loop: input, physics, entity spawning (hazards/pickups scaled by depth),
-  oxygen metering, and a system-drawn HUD. Textures and sounds are generated, not
-  loaded from disk.
-- **`desktop/`** — a `JavaExec` launch task wrapping `DesktopLauncherKt`, the dev
-  loop.
-- **`app/`** — `AndroidLauncher` extends `AndroidApplication` & wires the game to
-  the `AndroidApplicationConfiguration`; the `natives` classifier deps guarantee
-  the `.so` files reach `jniLibs`.
-- **Persistence** — best depth & score live in libGDX `Preferences` (key-value,
-  survives restarts, works identically on both backends).
-
-Everything is Kotlin, everything is version-pinned in `gradle/libs.versions.toml`,
-and the build is clean under the **configuration cache**.
+- **Procedural everything:** textures come from `Pixmap` drawing loops; sound
+  effects are synthesized into WAV buffers at startup in `AudioManager` (even
+  the "bubbles"), so the repo holds **zero** binary assets.
+- **Config cache:** the project is configuration-cache compatible — the build
+  reads are cached across runs (removing the non-serializable `natives` config
+  reference from the copy task is what fixed this).
+- **Entities:** `sealed class Pickup`/`Hazard` hierarchies in
+  `core/.../entity/`, driven each frame from `DepthDiverGame.render()`.
 
 ---
 
-## Roadmap ideas
+## 📜 License
 
-- [ ] More hazard types & a boss-depth milestone
-- [ ] Combo/multiplier for chained pearls
-- [ ] Sound muting + audio settings screen
-- [ ] `desktop:dist` fat-jar packaging
-- [ ] High-score leaderboard (local DB → cloud)
+Procedural assets → CC0-style (generated at runtime, nothing to license).
+The code itself: see [LICENSE](LICENSE) (add one if you haven't — GitHub shows
+a license badge when `LICENSE` exists).
 
-_Pull requests and ideas welcome!_ 🫧
+---
+
+**Depth Diver** — dive deep, surface safe. 🫧
