@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
@@ -28,6 +29,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var jellyfishTex: Texture
     private lateinit var pearlTex: Texture
     private lateinit var oxyTex: Texture
+    private lateinit var uiPixel: Texture
 
     private val hazards = mutableListOf<Hazard>()
     private val pickups = mutableListOf<Pickup>()
@@ -126,6 +128,13 @@ class DepthDiverGame : ApplicationAdapter() {
         oxyPix.fillRectangle(8, 4, 16, 18)
         oxyTex = Texture(oxyPix)
         oxyPix.dispose()
+
+        val uiPix = Pixmap(1, 1, Pixmap.Format.RGBA8888)
+        uiPix.setColor(Color.WHITE)
+        uiPix.fill()
+        uiPixel = Texture(uiPix)
+        uiPix.dispose()
+
         val sharkPix = Pixmap(96, 32, Pixmap.Format.RGBA8888)
         sharkPix.setColor(0.55f, 0.62f, 0.72f, 1f)
         sharkPix.fillTriangle(8, 16, 88, 16, 52, 30)
@@ -319,6 +328,36 @@ class DepthDiverGame : ApplicationAdapter() {
             reset()
             return
         }
+
+        if (Gdx.input.justTouched()) {
+            val tx = Gdx.input.x.toFloat()
+            val ty = worldHeight - Gdx.input.y.toFloat()
+            if (state == GameState.PLAYING) {
+                if (pillAt(tx, ty, worldWidth - 44f, worldHeight - 30f, 56f, 30f) || state == GameState.PLAYING && false) {
+                    state = GameState.PAUSED
+                    return
+                }
+            }
+            if (state == GameState.PAUSED) {
+                if (pillAt(tx, ty, worldWidth / 2f, worldHeight / 2f + 48f, 140f, 34f)) {
+                    state = GameState.PLAYING
+                    return
+                }
+                if (pillAt(tx, ty, worldWidth / 2f - 80f, worldHeight / 2f - 46f, 140f, 34f)) {
+                    reset()
+                    return
+                }
+                if (pillAt(tx, ty, worldWidth / 2f + 80f, worldHeight / 2f - 46f, 140f, 34f)) {
+                    audio.toggleMute()
+                    return
+                }
+            }
+            if (state == GameState.GAME_OVER) {
+                reset()
+                return
+            }
+        }
+
         if (state != GameState.PLAYING) return
 
         val delta = Gdx.graphics.deltaTime
@@ -383,7 +422,13 @@ class DepthDiverGame : ApplicationAdapter() {
         font.draw(batch, "SCORE: $score", 150f, worldHeight - 14f)
         font.draw(batch, "BEST: ${bestDepth.toInt()} m / $bestScore", 260f, worldHeight - 14f)
         font.draw(batch, "OXYGEN: ${(oxygen * 100).toInt()}%", 10f, worldHeight - 34f)
+        if (state == GameState.PLAYING) {
+            drawPill(batch, font, worldWidth - 44f, worldHeight - 30f, 56f, 30f, "PAUSE")
+        }
         if (state == GameState.PAUSED) {
+            drawPill(batch, font, worldWidth / 2f, worldHeight / 2f + 48f, 140f, 34f, "RESUME")
+            drawPill(batch, font, worldWidth / 2f - 80f, worldHeight / 2f - 46f, 140f, 34f, "RESTART")
+            drawPill(batch, font, worldWidth / 2f + 80f, worldHeight / 2f - 46f, 140f, 34f, "MUTE")
             font.color = Color.CYAN
             font.draw(batch, "PAUSED -- P/Esc resume  R restart  M mute", worldWidth / 2f - 180f, worldHeight / 2f)
             font.color = Color.WHITE
@@ -409,6 +454,27 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun playerRect() =
         Rectangle(playerX - playerRadius, playerY - playerRadius, playerRadius * 2f, playerRadius * 2f)
+
+    private fun pillAt(tx: Float, ty: Float, cx: Float, cy: Float, w: Float, h: Float): Boolean =
+        tx >= cx - w / 2f && tx <= cx + w / 2f && ty >= cy - h / 2f && ty <= cy + h / 2f
+
+    private fun drawPill(
+        batch: SpriteBatch,
+        font: BitmapFont,
+        cx: Float,
+        cy: Float,
+        w: Float,
+        h: Float,
+        label: String
+    ) {
+        batch.setColor(0f, 0f, 0f, 0.55f)
+        batch.draw(uiPixel, cx - w / 2f, cy - h / 2f, w, h)
+        batch.setColor(Color.WHITE)
+        font.color = Color.WHITE
+        val layout = GlyphLayout(font, label)
+        font.draw(batch, layout, cx - layout.width / 2f, cy + layout.height / 2f)
+    }
+
 
     private fun endGame() {
         if (state == GameState.PLAYING) {
