@@ -21,10 +21,12 @@ gets** — and your **oxygen is always draining**.
 |---------|-------------|
 | 🕹️ Steering | `WASD` / arrows (Kotlin `Gdx.input.isKeyPressed`) + touch drag (`Gdx.input.isTouched`) on Android |
 | 🫁 Oxygen | Drains faster with depth; die if it hits zero |
-| 💎 Pickups | **Pearls** (score) and **oxygen tanks** (restore air) |
-| ⚠️ Hazards | **Rocks**, **mines**, and **jellyfish** — one touch and it's lights out |
+| 💎 Pickups | **Pearls** (score — chain them within the combo window for a `×N` multiplier) and **oxygen tanks** (restore air) |
+| ⚠️ Hazards | **Rocks**, **mines**, **jellyfish**, and **sharks** — one touch and it's lights out |
+| 🦈 Boss milestone | Cross a depth milestone and a **boss shark (Leviathan)** rises — faster peril, bigger reward |
+| ⏸️ Pause | `P` / `Esc` toggles a pause overlay with resume/restart/mute |
 | 📈 Depth = difficulty | Enemy/pickup density & scroll speed ramp as you dive deeper |
-| 🏆 Persistence | Best depth + best score saved via libGDX `Preferences` |
+| 🏆 Persistence | Best depth + best score + **top-5 leaderboard** saved via libGDX `Preferences` |
 
 The whole game is **procedurally generated at runtime** — textures via
 `Pixmap` and all sound effects synthesized on the fly (no binary art/audio
