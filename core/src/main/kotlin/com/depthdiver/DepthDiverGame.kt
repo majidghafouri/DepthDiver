@@ -603,37 +603,52 @@ class DepthDiverGame : ApplicationAdapter() {
             batch.projectionMatrix = camera.combined
         }
 
+        val glyphLayout = GlyphLayout()
         font.color = Color.WHITE
-        font.draw(batch, "${Strings.t("depth")}: ${depth.toInt()} m", 10f, worldHeight - 14f)
-        font.draw(batch, "${Strings.t("score")}: $score", 150f, worldHeight - 14f)
-        font.draw(batch, "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore", 260f, worldHeight - 14f)
-        font.draw(batch, "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%", 10f, worldHeight - 34f)
+
+        val depthStr = "${Strings.t("depth")}: ${depth.toInt()} m"
+        glyphLayout.setText(font, depthStr)
+        font.draw(batch, glyphLayout, 10f, worldHeight - glyphLayout.height - 4f)
+
+        val scoreStr = "${Strings.t("score")}: $score"
+        glyphLayout.setText(font, scoreStr)
+        font.draw(batch, glyphLayout, 10f + glyphLayout.width + 16f, worldHeight - glyphLayout.height - 4f)
+
+        val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore"
+        glyphLayout.setText(font, bestStr)
+        val bestX = (worldWidth - glyphLayout.width - 10f).coerceAtLeast(10f + glyphLayout.width + 16f)
+        font.draw(batch, glyphLayout, bestX, worldHeight - glyphLayout.height - 4f)
+
+        val oxygenStr = "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%"
+        glyphLayout.setText(font, oxygenStr)
+        font.draw(batch, glyphLayout, 10f, worldHeight - glyphLayout.height * 2f - 8f)
+
         if (state == GameState.PLAYING) {
-            drawPill(batch, font, worldWidth - 44f, worldHeight - 30f, 56f, 30f, "PAUSE")
+            drawPill(batch, font, worldWidth - 44f, worldHeight - 30f, 56f, 30f, Strings.t("pause"))
         }
         if (state == GameState.PAUSED) {
-            drawPill(batch, font, worldWidth / 2f, worldHeight / 2f + 48f, 140f, 34f, "RESUME")
-            drawPill(batch, font, worldWidth / 2f - 80f, worldHeight / 2f - 46f, 140f, 34f, "RESTART")
-            drawPill(batch, font, worldWidth / 2f + 80f, worldHeight / 2f - 46f, 140f, 34f, "MUTE")
+            drawPill(batch, font, worldWidth / 2f, worldHeight / 2f + 48f, 140f, 34f, Strings.t("resume"))
+            drawPill(batch, font, worldWidth / 2f - 80f, worldHeight / 2f - 46f, 140f, 34f, Strings.t("restart"))
+            drawPill(batch, font, worldWidth / 2f + 80f, worldHeight / 2f - 46f, 140f, 34f, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
+            val glyphLayout = GlyphLayout()
             font.color = Color.CYAN
-            font.draw(batch, "PAUSED -- P/Esc resume  R restart  M mute", worldWidth / 2f - 180f, worldHeight / 2f)
+            val pausedStr = "${Strings.t("paused")} -- P/Esc ${Strings.t("resume").lowercase()}  R ${Strings.t("restart").lowercase()}  M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
+            glyphLayout.setText(font, pausedStr)
+            font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, worldHeight / 2f + glyphLayout.height / 2f)
             font.color = Color.WHITE
         }
         if (state == GameState.GAME_OVER) {
+            val glyphLayout = GlyphLayout()
+
             font.color = Color.RED
-            font.draw(
-                batch,
-                "GAME OVER - press R to restart",
-                worldWidth / 2f - 140f,
-                worldHeight / 2f
-            )
+            val gameOverStr = "${Strings.t("gameOver")} - ${Strings.t("pressR")}"
+            glyphLayout.setText(font, gameOverStr)
+            font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, worldHeight / 2f + glyphLayout.height / 2f)
+
             font.color = Color.GOLD
-            font.draw(
-                batch,
-                "BEST DEPTH: ${bestDepth.toInt()} m   HIGH SCORE: $bestScore",
-                worldWidth / 2f - 180f,
-                worldHeight / 2f - 22f
-            )
+            val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
+            glyphLayout.setText(font, bestStr)
+            font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, worldHeight / 2f - glyphLayout.height - 4f)
         }
         batch.end()
     }
