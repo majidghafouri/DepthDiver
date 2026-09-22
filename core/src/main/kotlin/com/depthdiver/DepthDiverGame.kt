@@ -39,6 +39,17 @@ object Strings {
     fun t(key: String): String = locale[key] ?: key
 }
 
+data class Particle(
+    var x: Float,
+    var y: Float,
+    var vx: Float,
+    var vy: Float,
+    var life: Float,
+    var maxLife: Float,
+    var color: Color,
+    var size: Float
+)
+
 class DepthDiverGame : ApplicationAdapter() {
 
     private lateinit var batch: SpriteBatch
@@ -73,6 +84,11 @@ class DepthDiverGame : ApplicationAdapter() {
     private var combo = 1
     private var comboTimer = 0f
 
+    private var shakeTimer = 0f
+    private var shakeIntensity = 0f
+
+    private val particles = mutableListOf<Particle>()
+
     private val playerSpeed = 320f
     private val playerRadius = 18f
     private val pixelsPerMeter = 20f
@@ -83,7 +99,7 @@ class DepthDiverGame : ApplicationAdapter() {
         batch = SpriteBatch()
         camera = OrthographicCamera()
         resize(Gdx.graphics.width, Gdx.graphics.height)
-        val generator = FreeTypeFontGenerator(Gdx.files.internal("fonts/DejaVuSans.ttf"))
+        val generator = FreeTypeFontGenerator(Gdx.files.internal("fonts/OpenSans-Regular.ttf"))
         val parameter = FreeTypeFontGenerator.FreeTypeFontParameter().apply {
             size = (worldHeight / 30f).toInt().coerceIn(16, 48)
             color = Color.WHITE
@@ -217,6 +233,29 @@ class DepthDiverGame : ApplicationAdapter() {
         }
     }
 
+    private fun triggerShake(duration: Float, intensity: Float) {
+        shakeTimer = duration
+        shakeIntensity = intensity
+    }
+
+    private fun spawnParticles(x: Float, y: Float, color: Color, count: Int) {
+        repeat(count) {
+            val angle = MathUtils.random(MathUtils.PI2)
+            val speed = MathUtils.random(60f, 180f)
+            val life = MathUtils.random(0.3f, 0.8f)
+            particles.add(Particle(
+                x = x,
+                y = y,
+                vx = MathUtils.cos(angle) * speed,
+                vy = MathUtils.sin(angle) * speed,
+                life = life,
+                maxLife = life,
+                color = Color(color),
+                size = MathUtils.random(3f, 7f)
+            ))
+        }
+    }
+
     override fun dispose() {
         batch.dispose()
         font.dispose()
@@ -234,6 +273,24 @@ class DepthDiverGame : ApplicationAdapter() {
         elapsed += delta
         oxygen -= delta * 0.02f
         depth = max(depth, (worldHeight - max(playerY, playerRadius)) / pixelsPerMeter)
+
+        if (shakeTimer > 0f) {
+            shakeTimer -= delta
+            if (shakeTimer < 0f) shakeTimer = 0f
+        }
+
+        val itrP = particles.iterator()
+        while (itrP.hasNext()) {
+            val p = itrP.next()
+            p.life -= delta
+            if (p.life <= 0f) {
+                itrP.remove()
+            } else {
+                p.x += p.vx * delta
+                p.y += p.vy * delta
+                p.vy -= 200f * delta
+            }
+        }
 
         val difficulty = (depth / 40f).coerceAtLeast(0f)
         val scrollSpeed = 90f + difficulty * 40f
@@ -253,6 +310,9 @@ class DepthDiverGame : ApplicationAdapter() {
 
         for (hazard in hazards) {
             if (playerRect().overlaps(hazard.rect)) {
+                triggerShake(0.3f, 12f)
+                Gdx.input.vibrate(100)
+                spawnParticles(playerX, playerY, Color.RED, 12)
                 endGame()
             }
         }
@@ -263,12 +323,18 @@ class DepthDiverGame : ApplicationAdapter() {
                     is Pickup.OxygenTank -> {
                         oxygen = (oxygen + 0.4f).coerceAtMost(1f)
                         audio.playOxygen()
+                        triggerShake(0.15f, 6f)
+                        Gdx.input.vibrate(40)
+                        spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.CYAN, 8)
                     }
                     is Pickup.Pearl -> {
                         combo += 1
                         comboTimer = 5f
                         score += 5 * combo
                         audio.playPickup()
+                        triggerShake(0.1f, 4f)
+                        Gdx.input.vibrate(30)
+                        spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.GOLD, 10)
                     }
                 }
             }
@@ -449,9 +515,25 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun draw() {
         Gdx.gl.glClearColor(0.02f, 0.12f, 0.25f, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
+
+        val originalCamX = camera.position.x
+        val originalCamY = camera.position.y
+        if (shakeTimer > 0f) {
+            val progress = 1f - shakeTimer / 0.3f
+            val currentIntensity = shakeIntensity * (1f - progress * 0.7f)
+            camera.position.x += MathUtils.random(-currentIntensity, currentIntensity)
+            camera.position.y += MathUtils.random(-currentIntensity, currentIntensity)
+            camera.update()
+        }
         batch.projectionMatrix = camera.combined
         batch.begin()
 
+        batch.setColor(1f, 1f, 1f, 1f)
+        for (particle in particles) {
+            val alpha = particle.life / particle.maxLife
+            batch.setColor(particle.color.r, particle.color.g, particle.color.b, alpha)
+            batch.draw(uiPixel, particle.x - particle.size / 2f, particle.y - particle.size / 2f, particle.size, particle.size)
+        }
         batch.setColor(1f, 1f, 1f, 1f)
         for (hazard in hazards) {
             val tex = when (hazard) {
@@ -475,6 +557,13 @@ class DepthDiverGame : ApplicationAdapter() {
             playerRadius * 2f,
             playerRadius * 2f
         )
+
+        if (shakeTimer > 0f) {
+            camera.position.x = originalCamX
+            camera.position.y = originalCamY
+            camera.update()
+            batch.projectionMatrix = camera.combined
+        }
 
         font.color = Color.WHITE
         font.draw(batch, "${Strings.t("depth")}: ${depth.toInt()} m", 10f, worldHeight - 14f)
