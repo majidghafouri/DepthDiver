@@ -606,38 +606,49 @@ class DepthDiverGame : ApplicationAdapter() {
         val glyphLayout = GlyphLayout()
         font.color = Color.WHITE
 
+        val lineHeight = glyphLayout.height
+        val padding = 4f
+        val lineSpacing = 2f
+        var y = worldHeight - lineHeight - padding
+
         val depthStr = "${Strings.t("depth")}: ${depth.toInt()} m"
         glyphLayout.setText(font, depthStr)
         val depthX = 10f
-        val depthY = worldHeight - glyphLayout.height - 4f
-        font.draw(batch, glyphLayout, depthX, depthY)
+        font.draw(batch, glyphLayout, 10f, y)
 
         val scoreStr = "${Strings.t("score")}: $score"
         glyphLayout.setText(font, scoreStr)
-        val scoreX = depthX + glyphLayout.width + 16f
-        font.draw(batch, glyphLayout, scoreX, depthY)
+        val scoreX = 10f + lineHeight + glyphLayout.width + 16f
+        font.draw(batch, glyphLayout, scoreX, y)
 
         val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore"
         glyphLayout.setText(font, bestStr)
         val bestX = (worldWidth - glyphLayout.width - 10f).coerceAtLeast(scoreX + glyphLayout.width + 16f)
-        font.draw(batch, glyphLayout, bestX, depthY)
+        font.draw(batch, glyphLayout, bestX, y)
 
+val pausePillRight = worldWidth - 16f
+            val pausePillLeft = pausePillRight - 56f
+            if (state == GameState.PLAYING) {
+                drawPill(batch, font, pausePillRight - 28f, worldHeight - 30f, 56f, 30f, Strings.t("pause"))
+            }
+
+        y -= lineHeight + lineSpacing
         val oxygenStr = "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%"
         glyphLayout.setText(font, oxygenStr)
-        font.draw(batch, glyphLayout, 10f, worldHeight - glyphLayout.height * 2f - 8f)
+        font.draw(batch, glyphLayout, 10f, y)
 
         if (state == GameState.PLAYING) {
-            drawPill(batch, font, worldWidth - 44f, worldHeight - 30f, 56f, 30f, Strings.t("pause"))
+            drawPill(batch, font, pausePillRight - 28f, worldHeight - 30f, 56f, 30f, Strings.t("pause"))
         }
         if (state == GameState.PAUSED) {
-            drawPill(batch, font, worldWidth / 2f, worldHeight / 2f + 48f, 140f, 34f, Strings.t("resume"))
-            drawPill(batch, font, worldWidth / 2f - 80f, worldHeight / 2f - 46f, 140f, 34f, Strings.t("restart"))
-            drawPill(batch, font, worldWidth / 2f + 80f, worldHeight / 2f - 46f, 140f, 34f, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
+            drawPill(batch, font, worldWidth / 2f, worldHeight / 2f + 60f, 140f, 34f, Strings.t("resume"))
+            drawPill(batch, font, worldWidth / 2f - 80f, worldHeight / 2f - 40f, 140f, 34f, Strings.t("restart"))
+            drawPill(batch, font, worldWidth / 2f + 80f, worldHeight / 2f - 40f, 140f, 34f, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
             val glyphLayout = GlyphLayout()
             font.color = Color.CYAN
             val pausedStr = "${Strings.t("paused")} -- P/Esc ${Strings.t("resume").lowercase()}  R ${Strings.t("restart").lowercase()}  M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
             glyphLayout.setText(font, pausedStr)
-            font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, worldHeight / 2f + glyphLayout.height / 2f)
+            font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, worldHeight / 2f - 10f)
             font.color = Color.WHITE
         }
         if (state == GameState.GAME_OVER) {
