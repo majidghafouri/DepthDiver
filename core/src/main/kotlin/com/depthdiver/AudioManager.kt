@@ -1,6 +1,7 @@
 package com.depthdiver
 
 import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.Preferences
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.math.MathUtils
 
@@ -10,20 +11,39 @@ class AudioManager {
     private var oxygen: Sound? = null
     private var crash: Sound? = null
     private var initialized = false
+    private var prefs: Preferences? = null
+
+    var muted: Boolean = false
+        set(value) {
+            field = value
+            prefs?.putBoolean("muted", value)?.flush()
+        }
 
     fun init() {
         if (initialized) return
         initialized = true
+        prefs = Gdx.app.getPreferences("depthdiver-settings")
+        muted = prefs?.getBoolean("muted", false) ?: false
         pickup = generateSound("pickup", 880f, 0.14f)
         oxygen = generateSound("oxygen", 640f, 0.2f)
         crash = generateSound("crash", 120f, 0.35f)
     }
 
-    fun playPickup() = pickup?.play(0.6f)
+    fun toggleMute() {
+        muted = !muted
+    }
 
-    fun playOxygen() = oxygen?.play(0.7f)
+    fun playPickup() {
+        if (!muted) pickup?.play(0.6f)
+    }
 
-    fun playCrash() = crash?.play(0.9f)
+    fun playOxygen() {
+        if (!muted) oxygen?.play(0.7f)
+    }
+
+    fun playCrash() {
+        if (!muted) crash?.play(0.9f)
+    }
 
     fun dispose() {
         pickup?.dispose()
