@@ -239,6 +239,10 @@ class DepthDiverGame : ApplicationAdapter() {
                     hazard.rect.y -= scrollSpeed * 0.45f * delta
                     hazard.rect.x = hazard.baseX + MathUtils.sin(elapsed * 1.5f + hazard.phase) * hazard.sway
                 }
+                is Hazard.Shark -> {
+                    hazard.rect.y -= scrollSpeed * (if (hazard.isBoss) 0.15f else 0.5f) * delta
+                    hazard.rect.x += MathUtils.sin(elapsed * 0.8f + hazard.phase) * 14f * delta
+                }
             }
             if (hazard.rect.y + hazard.rect.height < 0f ||
                 hazard.rect.x + hazard.rect.width < 0f ||
@@ -279,6 +283,12 @@ class DepthDiverGame : ApplicationAdapter() {
             depth > 18f && roll < 0.8f -> {
                 hazards.add(Hazard.Mine(Rectangle(x, worldHeight + 48f, 48f, 48f), MathUtils.random(0f, MathUtils.PI2)))
             }
+            depth > 80f && roll < 0.95f -> {
+                val boss = depth > 120f && MathUtils.random() < 0.04f
+                val w = if (boss) 130f else 84f
+                val h = if (boss) 46f else 30f
+                hazards.add(Hazard.Shark(Rectangle(x, worldHeight + 60f, w, h), 0f, boss))
+            }
             else -> {
                 val size = MathUtils.random(45f, 85f)
                 hazards.add(Hazard.Rock(Rectangle(x, worldHeight + 80f, size, size), MathUtils.random(0f, MathUtils.PI2)))
@@ -297,6 +307,14 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun handleInput() {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || Gdx.input.isKeyJustPressed(Input.Keys.P)) {
+            state = if (state == GameState.PLAYING) GameState.PAUSED else GameState.PLAYING
+            return
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.M)) {
+            audio.toggleMute()
+            return
+        }
         if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
             reset()
             return
@@ -342,6 +360,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 is Hazard.Rock -> rockTex
                 is Hazard.Mine -> mineTex
                 is Hazard.Jellyfish -> jellyfishTex
+                is Hazard.Shark -> rockTex
             }
             batch.draw(tex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
         }
@@ -364,6 +383,11 @@ class DepthDiverGame : ApplicationAdapter() {
         font.draw(batch, "SCORE: $score", 150f, worldHeight - 14f)
         font.draw(batch, "BEST: ${bestDepth.toInt()} m / $bestScore", 260f, worldHeight - 14f)
         font.draw(batch, "OXYGEN: ${(oxygen * 100).toInt()}%", 10f, worldHeight - 34f)
+        if (state == GameState.PAUSED) {
+            font.color = Color.CYAN
+            font.draw(batch, "PAUSED -- P/Esc resume  R restart  M mute", worldWidth / 2f - 180f, worldHeight / 2f)
+            font.color = Color.WHITE
+        }
         if (state == GameState.GAME_OVER) {
             font.color = Color.RED
             font.draw(
@@ -407,5 +431,5 @@ class DepthDiverGame : ApplicationAdapter() {
         state = GameState.PLAYING
     }
 
-    private enum class GameState { PLAYING, GAME_OVER }
+    private enum class GameState { PLAYING, PAUSED, GAME_OVER }
 }
