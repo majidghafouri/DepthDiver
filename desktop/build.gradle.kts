@@ -11,6 +11,7 @@ dependencies {
     implementation(libs.gdx)
     implementation(libs.gdx.backend.lwjgl3)
     implementation("com.badlogicgames.gdx:gdx-platform:${libs.versions.gdx.get()}:natives-desktop")
+    implementation("com.badlogicgames.gdx:gdx-freetype-platform:${libs.versions.gdx.get()}:natives-desktop")
 }
 
 kotlin {

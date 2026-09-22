@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.GlyphLayout
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
@@ -82,11 +83,21 @@ class DepthDiverGame : ApplicationAdapter() {
         batch = SpriteBatch()
         camera = OrthographicCamera()
         resize(Gdx.graphics.width, Gdx.graphics.height)
-        font = BitmapFont()
+        val generator = FreeTypeFontGenerator(Gdx.files.internal("fonts/DejaVuSans.ttf"))
+        val parameter = FreeTypeFontGenerator.FreeTypeFontParameter().apply {
+            size = (worldHeight / 30f).toInt().coerceIn(16, 48)
+            color = Color.WHITE
+            borderWidth = 1f
+            borderColor = Color.BLACK
+            borderStraight = true
+        }
+        font = generator.generateFont(parameter)
+        generator.dispose()
         prefs = Gdx.app.getPreferences("depthdiver")
         bestDepth = prefs.getFloat("bestDepth", 0f)
         bestScore = prefs.getInteger("bestScore", 0)
         audio.init()
+        restoreInterruptedRun()
 
         val playerPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
         playerPix.setColor(0.2f, 0.75f, 1f, 1f)
@@ -176,6 +187,34 @@ class DepthDiverGame : ApplicationAdapter() {
         handleInput()
         update(Gdx.graphics.deltaTime)
         draw()
+    }
+
+    override fun pause() {
+        if (state == GameState.PLAYING) {
+            prefs.putFloat("runDepth", depth)
+            prefs.putFloat("runScore", score.toFloat())
+            prefs.putFloat("runOxygen", oxygen)
+            prefs.putFloat("runElapsed", elapsed)
+            prefs.putBoolean("runSaved", true)
+            prefs.flush()
+        }
+    }
+
+    override fun resume() {
+        restoreInterruptedRun()
+    }
+
+    private fun restoreInterruptedRun() {
+        if (!prefs.getBoolean("runSaved", false)) return
+        depth = prefs.getFloat("runDepth", 0f)
+        score = prefs.getFloat("runScore", 0f).toInt()
+        oxygen = prefs.getFloat("runOxygen", 1f)
+        elapsed = prefs.getFloat("runElapsed", 0f)
+        prefs.putBoolean("runSaved", false)
+        prefs.flush()
+        if (state == GameState.GAME_OVER) {
+            endGame()
+        }
     }
 
     override fun dispose() {
