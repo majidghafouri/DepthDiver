@@ -47,6 +47,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var elapsed = 0f
     private var hazardTimer = 1f
     private var pickupTimer = 2f
+    private var combo = 1
+    private var comboTimer = 0f
 
     private val playerSpeed = 320f
     private val playerRadius = 18f
@@ -124,6 +126,13 @@ class DepthDiverGame : ApplicationAdapter() {
         oxyPix.fillRectangle(8, 4, 16, 18)
         oxyTex = Texture(oxyPix)
         oxyPix.dispose()
+        val sharkPix = Pixmap(96, 32, Pixmap.Format.RGBA8888)
+        sharkPix.setColor(0.55f, 0.62f, 0.72f, 1f)
+        sharkPix.fillTriangle(8, 16, 88, 16, 52, 30)
+        sharkPix.setColor(0.85f, 0.9f, 0.95f, 1f)
+        sharkPix.fillTriangle(58, 17, 84, 17, 62, 26)
+        sharkPix.setColor(0.15f, 0.18f, 0.22f, 1f)
+        sharkPix.fillCircle(22, 120, 3)
 
         reset()
     }
@@ -188,7 +197,9 @@ class DepthDiverGame : ApplicationAdapter() {
                         audio.playOxygen()
                     }
                     is Pickup.Pearl -> {
-                        score += 5
+                        combo += 1
+                        comboTimer = 5f
+                        score += 5 * combo
                         audio.playPickup()
                     }
                 }

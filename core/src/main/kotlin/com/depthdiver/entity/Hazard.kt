@@ -13,4 +13,9 @@ sealed class Hazard {
         val sway: Float,
         val baseX: Float
     ) : Hazard()
+    class Shark(
+        override val rect: Rectangle,
+        val phase: Float,
+        val isBoss: Boolean = false
+    ) : Hazard()
 }
