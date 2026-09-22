@@ -608,16 +608,19 @@ class DepthDiverGame : ApplicationAdapter() {
 
         val depthStr = "${Strings.t("depth")}: ${depth.toInt()} m"
         glyphLayout.setText(font, depthStr)
-        font.draw(batch, glyphLayout, 10f, worldHeight - glyphLayout.height - 4f)
+        val depthX = 10f
+        val depthY = worldHeight - glyphLayout.height - 4f
+        font.draw(batch, glyphLayout, depthX, depthY)
 
         val scoreStr = "${Strings.t("score")}: $score"
         glyphLayout.setText(font, scoreStr)
-        font.draw(batch, glyphLayout, 10f + glyphLayout.width + 16f, worldHeight - glyphLayout.height - 4f)
+        val scoreX = depthX + glyphLayout.width + 16f
+        font.draw(batch, glyphLayout, scoreX, depthY)
 
         val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore"
         glyphLayout.setText(font, bestStr)
-        val bestX = (worldWidth - glyphLayout.width - 10f).coerceAtLeast(10f + glyphLayout.width + 16f)
-        font.draw(batch, glyphLayout, bestX, worldHeight - glyphLayout.height - 4f)
+        val bestX = (worldWidth - glyphLayout.width - 10f).coerceAtLeast(scoreX + glyphLayout.width + 16f)
+        font.draw(batch, glyphLayout, bestX, depthY)
 
         val oxygenStr = "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%"
         glyphLayout.setText(font, oxygenStr)
