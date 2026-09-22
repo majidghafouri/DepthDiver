@@ -73,23 +73,33 @@ class DepthDiverGame : ApplicationAdapter() {
     private var bestDepth = 0f
     private var bestScore = 0
 
+    private var totalPearls = 0
+    private var upgradeOxygenLevel = 0
+    private var upgradeSpeedLevel = 0
+    private var upgradeComboLevel = 0
+    private var upgradeShieldLevel = 0
+    private var upgradePearlValueLevel = 0
+
     private var playerX = 0f
     private var playerY = 0f
     private var depth = 0f
     private var score = 0
     private var oxygen = 1f
+    private var maxOxygen = 1f
     private var elapsed = 0f
     private var hazardTimer = 1f
     private var pickupTimer = 2f
     private var combo = 1
     private var comboTimer = 0f
+    private var shieldActive = false
+    private var shieldCooldown = 0f
 
     private var shakeTimer = 0f
     private var shakeIntensity = 0f
 
     private val particles = mutableListOf<Particle>()
 
-    private val playerSpeed = 320f
+    private var playerSpeed = 320f
     private val playerRadius = 18f
     private val pixelsPerMeter = 20f
     private var worldWidth = 800f
@@ -112,6 +122,13 @@ class DepthDiverGame : ApplicationAdapter() {
         prefs = Gdx.app.getPreferences("depthdiver")
         bestDepth = prefs.getFloat("bestDepth", 0f)
         bestScore = prefs.getInteger("bestScore", 0)
+        totalPearls = prefs.getInteger("totalPearls", 0)
+        upgradeOxygenLevel = prefs.getInteger("upgradeOxygen", 0)
+        upgradeSpeedLevel = prefs.getInteger("upgradeSpeed", 0)
+        upgradeComboLevel = prefs.getInteger("upgradeCombo", 0)
+        upgradeShieldLevel = prefs.getInteger("upgradeShield", 0)
+        upgradePearlValueLevel = prefs.getInteger("upgradePearlValue", 0)
+        applyUpgrades()
         audio.init()
         restoreInterruptedRun()
 
@@ -279,6 +296,14 @@ class DepthDiverGame : ApplicationAdapter() {
             if (shakeTimer < 0f) shakeTimer = 0f
         }
 
+        if (shieldCooldown > 0f) {
+            shieldCooldown -= delta
+            if (shieldCooldown <= 0f) {
+                shieldCooldown = 0f
+                shieldActive = false
+            }
+        }
+
         val itrP = particles.iterator()
         while (itrP.hasNext()) {
             val p = itrP.next()
@@ -310,10 +335,19 @@ class DepthDiverGame : ApplicationAdapter() {
 
         for (hazard in hazards) {
             if (playerRect().overlaps(hazard.rect)) {
-                triggerShake(0.3f, 12f)
-                Gdx.input.vibrate(100)
-                spawnParticles(playerX, playerY, Color.RED, 12)
-                endGame()
+                if (upgradeShieldLevel > 0 && !shieldActive && shieldCooldown <= 0f) {
+                    shieldActive = true
+                    shieldCooldown = 10f - upgradeShieldLevel * 1.5f
+                    audio.playOxygen()
+                    triggerShake(0.15f, 8f)
+                    Gdx.input.vibrate(60)
+                    spawnParticles(playerX, playerY, Color.MAGENTA, 15)
+                } else {
+                    triggerShake(0.3f, 12f)
+                    Gdx.input.vibrate(100)
+                    spawnParticles(playerX, playerY, Color.RED, 12)
+                    endGame()
+                }
             }
         }
         for (pickup in pickups) {
@@ -321,7 +355,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 pickup.collected = true
                 when (pickup) {
                     is Pickup.OxygenTank -> {
-                        oxygen = (oxygen + 0.4f).coerceAtMost(1f)
+                        oxygen = (oxygen + 0.4f).coerceAtMost(maxOxygen)
                         audio.playOxygen()
                         triggerShake(0.15f, 6f)
                         Gdx.input.vibrate(40)
@@ -330,7 +364,11 @@ class DepthDiverGame : ApplicationAdapter() {
                     is Pickup.Pearl -> {
                         combo += 1
                         comboTimer = 5f
-                        score += 5 * combo
+                        val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5)).toInt()
+                        score += pearlValue * combo
+                        totalPearls += pearlValue
+                        prefs.putInteger("totalPearls", totalPearls)
+                        prefs.flush()
                         audio.playPickup()
                         triggerShake(0.1f, 4f)
                         Gdx.input.vibrate(30)
@@ -631,17 +669,28 @@ class DepthDiverGame : ApplicationAdapter() {
         }
     }
 
+    private fun applyUpgrades() {
+        maxOxygen = 1f + upgradeOxygenLevel * 0.15f
+        oxygen = maxOxygen
+        playerSpeed = 320f * (1f + upgradeSpeedLevel * 0.08f)
+    }
+
     private fun reset() {
         playerX = worldWidth / 2f
         playerY = worldHeight * 0.25f
         depth = 0f
         score = 0
-        oxygen = 1f
+        applyUpgrades()
         elapsed = 0f
         hazardTimer = 1f
         pickupTimer = 2f
+        combo = 1
+        comboTimer = 0f
+        shieldActive = false
+        shieldCooldown = 0f
         hazards.clear()
         pickups.clear()
+        particles.clear()
         state = GameState.PLAYING
     }
 
