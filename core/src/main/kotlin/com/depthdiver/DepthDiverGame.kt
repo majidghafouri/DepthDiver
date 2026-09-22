@@ -18,6 +18,26 @@ import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
 import kotlin.math.max
 
+object Strings {
+    private val EN = mapOf(
+        "depth" to "DEPTH",
+        "score" to "SCORE",
+        "best" to "BEST",
+        "oxygen" to "OXYGEN",
+        "pause" to "PAUSE",
+        "resume" to "RESUME",
+        "restart" to "RESTART",
+        "muteOn" to "MUTE ON",
+        "muteOff" to "MUTE OFF",
+        "paused" to "PAUSED",
+        "gameOver" to "GAME OVER",
+        "pressR" to "press R to restart"
+    )
+    private val locale = EN
+
+    fun t(key: String): String = locale[key] ?: key
+}
+
 class DepthDiverGame : ApplicationAdapter() {
 
     private lateinit var batch: SpriteBatch
@@ -418,10 +438,10 @@ class DepthDiverGame : ApplicationAdapter() {
         )
 
         font.color = Color.WHITE
-        font.draw(batch, "DEPTH: ${depth.toInt()} m", 10f, worldHeight - 14f)
-        font.draw(batch, "SCORE: $score", 150f, worldHeight - 14f)
-        font.draw(batch, "BEST: ${bestDepth.toInt()} m / $bestScore", 260f, worldHeight - 14f)
-        font.draw(batch, "OXYGEN: ${(oxygen * 100).toInt()}%", 10f, worldHeight - 34f)
+        font.draw(batch, "${Strings.t("depth")}: ${depth.toInt()} m", 10f, worldHeight - 14f)
+        font.draw(batch, "${Strings.t("score")}: $score", 150f, worldHeight - 14f)
+        font.draw(batch, "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore", 260f, worldHeight - 14f)
+        font.draw(batch, "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%", 10f, worldHeight - 34f)
         if (state == GameState.PLAYING) {
             drawPill(batch, font, worldWidth - 44f, worldHeight - 30f, 56f, 30f, "PAUSE")
         }
