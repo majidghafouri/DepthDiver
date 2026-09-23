@@ -778,7 +778,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 if (Gdx.input.justTouched()) {
                     val tx = touchX()
                     val ty = touchY()
-                    val pillY = gameOverPillY()
+                    val pillY = gameOverBox().pillY
                     val menu = Strings.t("menu")
                     if (Widgets.contains(tx, ty, worldWidth / 2f + 95f, pillY, Widgets.pillW(font, menu), Widgets.pillH(font, menu))) {
                         goToMenu()
@@ -989,8 +989,39 @@ class DepthDiverGame : ApplicationAdapter() {
         state = GameState.MAIN_MENU
     }
 
-    private fun gameOverPillY(): Float =
-        if (worldHeight >= 560f) worldHeight / 2f - 145f else worldHeight / 2f - 118f
+    private data class GameOverBox(
+        val titleY: Float,
+        val recordY: Float,
+        val top5Y: Float,
+        val panelTop: Float,
+        val panelBottom: Float,
+        val panelH: Float,
+        val pillY: Float,
+    )
+
+    /** One shared source for the game-over screen layout so drawing and hit-tests agree
+     *  and text/buttons always clear each other. Badge/panel rows are stacked from the
+     *  title downward with spacing that scales with the screen, never fixed offsets. */
+    private fun gameOverBox(): GameOverBox {
+        val centerY = worldHeight / 2f
+        val tall = worldHeight >= 560f
+        if (!tall) {
+            return GameOverBox(centerY + 96f, Float.NaN, Float.NaN, 0f, 0f, 0f, centerY - 118f)
+        }
+        val titleY = centerY + min(290f, worldHeight * 0.26f)
+        val showD = score > startBestScore
+        val showT = leaderboardMade
+        val recordY = if (showD) titleY - 50f else Float.NaN
+        val top5Y = if (showT) titleY - (if (showD) 96f else 50f) else Float.NaN
+        val rowGap = min(44f, worldHeight / 22f)
+        val contentH = rowGap * 4f + 58f
+        var panelTop = titleY - 30f
+        if (showD) panelTop -= 46f
+        if (showT) panelTop -= 46f
+        val panelBottom = panelTop - contentH
+        val pillY = panelBottom - 85f
+        return GameOverBox(titleY, recordY, top5Y, panelTop, panelBottom, contentH, pillY)
+    }
 
     private fun handlePauseTouch(tx: Float, ty: Float) {
         val labels = listOf(Strings.t("resume")) + listOf(Strings.t("menu"))
@@ -1602,44 +1633,43 @@ class DepthDiverGame : ApplicationAdapter() {
         }
         if (state == GameState.GAME_OVER) {
             val centerX = worldWidth / 2f
-            val centerY = worldHeight / 2f
-            val pillY = gameOverPillY()
+            val box = gameOverBox()
+            val tall = worldHeight >= 560f
 
             font.color = Color.RED
             val gameOverStr = "${Strings.t("gameOver")} - ${Strings.t("pressR")}"
             glyphLayout.setText(font, gameOverStr)
-            val titleY = if (worldHeight >= 560f) centerY + 150f else centerY + glyphLayout.height / 2f + 16f
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, titleY)
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.titleY)
 
-            if (worldHeight >= 560f) {
-                if (score > startBestScore) {
+            if (tall) {
+                if (!box.recordY.isNaN()) {
                     font.color = Color.GOLD
                     glyphLayout.setText(font, Strings.t("newRecord"))
-                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + 116f)
+                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.recordY)
                 }
-                if (leaderboardMade) {
+                if (!box.top5Y.isNaN()) {
                     font.color = Color.GOLD
                     glyphLayout.setText(font, Strings.t("top5"))
-                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + 86f)
+                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.top5Y)
                 }
 
                 val panelCx = centerX
-                val panelCy = centerY
+                val panelCy = (box.panelTop + box.panelBottom) / 2f
                 val panelW = min(worldWidth * 0.75f, 460f)
-                val panelH = 154f
-                Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
+                Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, box.panelH)
 
+                val rowGap = min(44f, worldHeight / 22f)
                 val rows = listOf(
                     Pair(Strings.t("reachedDepth"), "${depth.toInt()} m"),
                     Pair(Strings.t("score"), "$score"),
                     Pair(Strings.t("pearlsGained"), "+$runPearls"),
-                    Pair("${Strings.t("best")} ${Strings.t("depth")}", "  ${bestDepth.toInt()} m  ${Strings.t("score")} $bestScore")
+                    Pair("${Strings.t("best")} ${Strings.t("depth").lowercase()}", "${bestDepth.toInt()} m"),
+                    Pair("${Strings.t("best")} ${Strings.t("score").lowercase()}", "$bestScore")
                 )
                 val labelX = panelCx - panelW / 2f + 30f
                 val valueX = panelCx + panelW / 2f - 30f
-                val lineGap = min(30f, panelH / (rows.size + 1))
                 rows.forEachIndexed { i, (label, value) ->
-                    val cy = panelCy - panelH / 2f + 24f + lineGap * i
+                    val cy = box.panelTop - 28f - rowGap * i
                     font.color = Color.WHITE
                     Widgets.textLeft(batch, font, label, labelX, cy)
                     font.color = Color.GOLD
@@ -1647,6 +1677,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
                 font.color = Color.WHITE
             } else {
+                val centerY = worldHeight / 2f
                 font.color = Color.GOLD
                 val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
                 glyphLayout.setText(font, bestStr)
@@ -1664,8 +1695,8 @@ class DepthDiverGame : ApplicationAdapter() {
             }
             font.color = Color.WHITE
 
-            Widgets.pill(batch, font, uiPixel, centerX - 95f, pillY, Strings.t("restart"))
-            Widgets.pill(batch, font, uiPixel, centerX + 95f, pillY, Strings.t("menu"))
+            Widgets.pill(batch, font, uiPixel, centerX - 95f, box.pillY, Strings.t("restart"))
+            Widgets.pill(batch, font, uiPixel, centerX + 95f, box.pillY, Strings.t("menu"))
         }
         if (achievementToastTimer > 0f) drawAchievementToast()
     }
