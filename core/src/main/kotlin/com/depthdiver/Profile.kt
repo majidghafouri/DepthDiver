@@ -9,11 +9,19 @@ import com.badlogic.gdx.Preferences
  */
 object Profile {
 
-    private val prefs: Preferences
-        get() = prefsOverride ?: Gdx.app.getPreferences("depthdiver")
+    /**
+     * Android [AndroidPreferences] buffers writes in a per-instance [Preferences.Editor];
+     * `flush()` is a no-op when the editor is empty (i.e. a fresh wrapper). Every mutator
+     * must therefore go through ONE retained instance, otherwise put/flush land on separate
+     * wrappers and the write is silently dropped. [prefsOverride] lets unit tests inject an
+     * isolated in-memory [Preferences].
+     */
+    private var retained: Preferences? = null
 
-    /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
     internal var prefsOverride: Preferences? = null
+
+    private fun prefs(): Preferences =
+        prefsOverride ?: (retained ?: Gdx.app.getPreferences("depthdiver").also { retained = it })
 
     const val MAX_LEVEL = 5
 
@@ -27,62 +35,68 @@ object Profile {
 
     // ---------- wallet / lifetime stats ----------
 
-    fun pearls(): Int = prefs.getInteger("totalPearls", 0)
+    fun pearls(): Int = prefs().getInteger("totalPearls", 0)
 
     fun addPearls(n: Int) {
-        prefs.putInteger("totalPearls", pearls() + n)
-        prefs.flush()
+        val p = prefs()
+        p.putInteger("totalPearls", pearls() + n)
+        p.flush()
     }
 
     fun spendPearls(n: Int) = addPearls(-n)
 
-    fun lifetimePearls(): Int = prefs.getInteger("lifetimePearls", 0)
+    fun lifetimePearls(): Int = prefs().getInteger("lifetimePearls", 0)
 
     fun addLifetimePearls(n: Int) {
-        prefs.putInteger("lifetimePearls", lifetimePearls() + n)
-        prefs.flush()
+        val p = prefs()
+        p.putInteger("lifetimePearls", lifetimePearls() + n)
+        p.flush()
     }
 
-    fun dives(): Int = prefs.getInteger("dives", 0)
+    fun dives(): Int = prefs().getInteger("dives", 0)
 
     fun recordDive() {
-        prefs.putInteger("dives", dives() + 1)
-        prefs.flush()
+        val p = prefs()
+        p.putInteger("dives", dives() + 1)
+        p.flush()
     }
 
-    fun bestDepth(): Float = prefs.getFloat("bestDepth", 0f)
+    fun bestDepth(): Float = prefs().getFloat("bestDepth", 0f)
 
-    fun bestScore(): Int = prefs.getInteger("bestScore", 0)
+    fun bestScore(): Int = prefs().getInteger("bestScore", 0)
 
     // ---------- daily bonus ----------
 
     /** Day index in UTC (24 h buckets) — avoids needing java.time on older Android. */
     fun dailyDay(): Int = (System.currentTimeMillis() / 86_400_000L).toInt()
 
-    fun claimedDailyDay(): Int = prefs.getInteger("dailyDay", 0)
+    fun claimedDailyDay(): Int = prefs().getInteger("dailyDay", 0)
 
     fun claimDaily(day: Int) {
-        prefs.putInteger("dailyDay", day)
-        prefs.flush()
+        val p = prefs()
+        p.putInteger("dailyDay", day)
+        p.flush()
     }
 
     // ---------- settings ----------
 
     /** 0 = EASY, 1 = NORMAL, 2 = HARD. */
-    fun difficulty(): Int = prefs.getInteger("difficulty", 1)
+    fun difficulty(): Int = prefs().getInteger("difficulty", 1)
 
     fun setDifficulty(index: Int) {
-        prefs.putInteger("difficulty", index)
-        prefs.flush()
+        val p = prefs()
+        p.putInteger("difficulty", index)
+        p.flush()
     }
 
     // ---------- upgrades ----------
 
-    fun level(u: Upgrade): Int = prefs.getInteger(u.key, 0)
+    fun level(u: Upgrade): Int = prefs().getInteger(u.key, 0)
 
     fun setLevel(u: Upgrade, value: Int) {
-        prefs.putInteger(u.key, value)
-        prefs.flush()
+        val p = prefs()
+        p.putInteger(u.key, value)
+        p.flush()
     }
 
     fun isMaxed(u: Upgrade): Boolean = level(u) >= MAX_LEVEL

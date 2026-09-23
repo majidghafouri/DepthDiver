@@ -11,7 +11,11 @@ import com.badlogic.gdx.Preferences
 object Challenge {
 
     private val prefs: Preferences
-        get() = prefsOverride ?: Gdx.app.getPreferences("depthdiver-challenge")
+        get() = prefsOverride ?: (retained ?: Gdx.app.getPreferences("depthdiver-challenge").also { retained = it })
+
+    /** One retained instance — see [Profile] note; a fresh wrapper per access would
+     *  put() into one editor and flush() another (a silent no-op). */
+    private var retained: Preferences? = null
 
     /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
     internal var prefsOverride: Preferences? = null
@@ -45,7 +49,8 @@ object Challenge {
     fun claimedFor(active: Active): Boolean = prefs.getBoolean("challenge.${active.day}", false)
 
     fun claim(active: Active) {
-        prefs.putBoolean("challenge.${active.day}", true)
-        prefs.flush()
+        val p = prefs
+        p.putBoolean("challenge.${active.day}", true)
+        p.flush()
     }
 }

@@ -37,15 +37,20 @@ object Leaderboard : LeaderboardService {
     /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
     internal var prefsOverride: Preferences? = null
 
-    private val prefs: Preferences
-        get() = prefsOverride ?: Gdx.app.getPreferences("depthdiver-leaderboard")
+    /** One retained instance — see [com.depthdiver.Profile] note; a fresh wrapper
+     *  per access would drop put/flush pairs. */
+    private var retained: Preferences? = null
+
+    private fun prefs(): Preferences =
+        prefsOverride ?: (retained ?: Gdx.app.getPreferences("depthdiver-leaderboard").also { retained = it })
 
     override fun top(): List<LeaderboardEntry> {
+        val p = prefs()
         val entries = ArrayList<LeaderboardEntry>(MAX_ENTRIES)
         for (i in 0 until MAX_ENTRIES) {
-            val score = prefs.getInteger("score.$i", -1)
+            val score = p.getInteger("score.$i", -1)
             if (score < 0) break
-            entries.add(LeaderboardEntry(score, prefs.getFloat("depth.$i", 0f)))
+            entries.add(LeaderboardEntry(score, p.getFloat("depth.$i", 0f)))
         }
         return entries
     }
@@ -64,10 +69,10 @@ object Leaderboard : LeaderboardService {
                 .thenByDescending { it.depth })
             .take(MAX_ENTRIES)
         for (i in merged.indices) {
-            prefs.putInteger("score.$i", merged[i].score)
-            prefs.putFloat("depth.$i", merged[i].depth)
+            prefs().putInteger("score.$i", merged[i].score)
+            prefs().putFloat("depth.$i", merged[i].depth)
         }
-        prefs.flush()
+        prefs().flush()
         return merged
     }
 }

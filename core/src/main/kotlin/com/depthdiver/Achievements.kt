@@ -9,7 +9,11 @@ object Achievements {
     data class Def(val id: String, val name: String, val check: () -> Boolean)
 
     private val prefs: Preferences
-        get() = prefsOverride ?: Gdx.app.getPreferences("depthdiver-achievements")
+        get() = prefsOverride ?: (retained ?: Gdx.app.getPreferences("depthdiver-achievements").also { retained = it })
+
+    /** One retained instance — see [Profile] note; a fresh wrapper per access would
+     *  put() into one editor and flush() another (a silent no-op). */
+    private var retained: Preferences? = null
 
     /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
     internal var prefsOverride: Preferences? = null
@@ -34,8 +38,9 @@ object Achievements {
     fun checkAndEarn(): String? {
         for (def in ALL) {
             if (!isUnlocked(def) && def.check()) {
-                prefs.putBoolean(def.id, true)
-                prefs.flush()
+                val p = prefs
+                p.putBoolean(def.id, true)
+                p.flush()
                 return def.name
             }
         }
