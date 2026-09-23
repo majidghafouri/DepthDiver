@@ -19,18 +19,27 @@ gets** — and your **oxygen is always draining**.
 
 | Concept | In practice |
 |---------|-------------|
-| 🕹️ Steering | `WASD` / arrows (Kotlin `Gdx.input.isKeyPressed`) + touch drag (`Gdx.input.isTouched`) on Android |
+| 🕹️ Steering | `WASD` / arrows on desktop, **touch & drag** on Android |
 | 🫁 Oxygen | Drains faster with depth; die if it hits zero |
-| 💎 Pickups | **Pearls** (score — chain them within the combo window for a `×N` multiplier) and **oxygen tanks** (restore air) |
-| ⚠️ Hazards | **Rocks**, **mines**, **jellyfish**, and **sharks** — one touch and it's lights out |
-| 🦈 Boss milestone | Cross a depth milestone and a **boss shark (Leviathan)** rises — faster peril, bigger reward |
-| ⏸️ Pause | `P` / `Esc` toggles a pause overlay with resume/restart/mute |
-| 📈 Depth = difficulty | Enemy/pickup density & scroll speed ramp as you dive deeper |
+| 💎 Pickups | **Pearls** (score — chain them inside the combo window for a `×N` multiplier) and **oxygen tanks** (restore air) |
+| ⚠️ Hazards | **Rocks**, **mines**, **jellyfish**, **sharks**, and deep-water **eels** that sweep across the screen |
+| 🦈 Boss event | Past 120 m a **Leviathan boss shark** can rise — a red `LEVIATHAN AHEAD!` warning plays, and if it swims past you bank **+50 pearls** |
+| 🏆 Milestones | Every **50 m** you earn a `+10` pearl bonus banner |
+| 💠 Combo | `COMBO xN` HUD with a draining window bar (drops back to `×1` if you miss a pearl in time) |
+| 🧿 Mid-run upgrades | The pause overlay has a **QUICK BUY** row — spend pearls on OXYGEN / SPEED between breaths |
+| 🎚️ Difficulty | EASY / NORMAL / HARD on the main menu, tuning oxygen drain, scroll speed and spawn rates |
+| 🏅 Achievements | 9 milestones (depth, lifetime pearls, dives) with gold unlock banners and a dedicated screen |
+| 🎁 Daily bonus | **+25 pearls** for your first dive of each day |
+| ⏸️ Pause | `P` / `Esc` toggles a pause overlay with resume / restart / mute / quick-buy |
 | 🏆 Persistence | Best depth + best score + **top-5 leaderboard** saved via libGDX `Preferences` |
 
+**Meta screens** on the main menu: **Profile** (stats + daily bonus status),
+**Leaderboard** (top 5 by score), **Shop** (5 escalating upgrade tracks), and
+**Achievements** (opens from the profile screen).
+
 The whole game is **procedurally generated at runtime** — textures via
-`Pixmap` and all sound effects synthesized on the fly (no binary art/audio
-assets to license).
+`Pixmap` and all sound effects *and ambient music* synthesized on the fly
+(drone + tide LFO + bubbles), so there are no binary art/audio assets to license.
 
 ---
 
@@ -40,20 +49,26 @@ libGDX-style **multi-module Kotlin** project:
 
 ```
 DepthDiver/
-├── core/        # Everything that makes the game a game (Kotlin, engine-agnostic-ish libGDX)
+├── core/        # Everything that makes the game a game (Kotlin + libGDX)
 │   └── com/depthdiver/
-│       ├── DepthDiverGame.kt      # main ApplicationAdapter — game loop
-│       ├── AudioManager.kt        # procedural WAV synthesizer (pickup/oxygen/crash SFX)
-│       └── entity/                # Pickup (Pearl, OxygenTank), Hazard (Rock, Mine, Jellyfish)
+│       ├── DepthDiverGame.kt      # main ApplicationAdapter — game loop, screens, HUD
+│       ├── AudioManager.kt        # procedural WAV synthesizer (SFX + ambience)
+│       ├── Widgets.kt             # procedural pill/panel/text UI helpers
+│       ├── Profile.kt             # wallet, lifetime stats, upgrades, difficulty, daily bonus
+│       ├── Leaderboard.kt         # top-5 persistence
+│       ├── Achievements.kt        # 9 milestone definitions + unlock flags
+│       └── entity/                # Pickup (Pearl, OxygenTank), Hazard (Rock, Mine, Jellyfish, Shark, Eel)
 ├── desktop/     # LWJGL3 launcher (gdx-backend-lwjgl3 + gdx-platform natives)
-├── app/         # Android launcher (gdx-backend-android) — runs on emulator/device
+├── app/         # Android launcher (gdx-backend-android) — package app.depthdiver
 ├── gradle/      # version catalog (libs.versions.toml) — all versions pinned here
 └── settings.gradle.kts
 ```
 
 **Package conventions:** game domain lives in `com.depthdiver` (core); the
-Android entry point is `app.depthdiver.AndroidLauncher`; the desktop entry
-point is `com.depthdiver.desktop.DesktopLauncherKt`.
+Android application id / namespace is `app.depthdiver`; the **launcher Activity
+class** is `app.deepdepthdiver.AndroidLauncher` (note the stray "e" — keep the
+full `package.Class` when launching via `adb`); the desktop entry point is
+`com.depthdiver.desktop.DesktopLauncherKt`.
 
 ---
 
@@ -61,18 +76,18 @@ point is `com.depthdiver.desktop.DesktopLauncherKt`.
 
 | Concern | Technology |
 |---------|-----------|
-| Game framework | **[libGDX](https://libgdx.com) 1.12.1** — `ApplicationAdapter`, `SpriteBatch`, `ShapeRenderer`, `Pixmap`, `OrthographicCamera`, `Gdx.input` |
+| Game framework | **[libGDX](https://libgdx.com) 1.14.2** — `ApplicationAdapter`, `SpriteBatch`, `Pixmap`, `OrthographicCamera`, `Gdx.input`, FreeType fonts |
 | Game backend (Android) | `gdx-backend-android` + `gdx-platform` `natives-*` classifier jars (so the `libgdx.so` natives are packaged per ABI) |
 | Game backend (desktop) | `gdx-backend-lwjgl3` + `gdx-platform:natives-desktop` |
 | Platform | **Kotlin** + Gradle Kotlin DSL, AGP via version catalog |
-| UI | libGDX's own `BitmapFont` HUD (system-drawn) — no third-party UI |
+| UI | libGDX `BitmapFont` HUD rendered from **procedurally drawn** pill/panel sprites — no third-party UI |
+| Fonts | `OpenSans-Regular.ttf` via `FreeTypeFontGenerator` (regular + title fonts) |
 | Build | Gradle wrapper, [version catalog](gradle/libs.versions.toml), configuration-cache-friendly |
 | Target SDKs | Android `minSdk 24` / `targetSdk 37`, Java 11 source-level |
 
-There is **no unused dependency**: the catalog was pruned of the stock
-appcompat / core-ktx / junit / espresso entries that the Android Studio
-template ships but this project doesn't use. `Material` is only referenced by
-the Android theme.
+There is **no unused dependency**: the catalog was pruned of the appcompat /
+core-ktx / junit / espresso entries that the Android Studio template ships but
+this project doesn't use. `Material` is only referenced by the Android theme.
 
 ---
 
@@ -90,15 +105,15 @@ the Android theme.
 ./gradlew :desktop:run
 ```
 
-This launches the LWJGL3 window with procedural audio — perfect for iterating on
-gameplay without an emulator.
+This launches the LWJGL3 window (800×600) with procedural audio — perfect for
+iterating on gameplay without an emulator.
 
 ### Android
 
 ```bash
 ./gradlew :app:assembleDebug                # build the APK
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n app.depthdiver/.AndroidLauncher
+adb shell am start -n app.depthdiver/app.deepdepthdiver.AndroidLauncher
 ```
 
 > **Why the APK has `libgdx.so`:** libGDX ships its Android natives as
@@ -110,6 +125,10 @@ adb shell am start -n app.depthdiver/.AndroidLauncher
 > `natives`/`implementation` mechanism auto-packs `lib/<abi>/libgdx.so` into
 > the APK. No manual jniLibs copying needed.
 
+> **Quick verification on an emulator:** launch the app, confirm it stayed
+> foregrounded (`adb shell pidof app.depthdiver`), then make sure there are no
+> runtime errors: `adb logcat -d -s AndroidRuntime:E '*:S'`.
+
 ---
 
 ## 🕹️ Controls
@@ -117,21 +136,30 @@ adb shell am start -n app.depthdiver/.AndroidLauncher
 | Action | Desktop | Android |
 |--------|---------|---------|
 | Move up / down / left / right | `WASD` or arrow keys | **touch & drag** (`isTouched`) |
-| Restart (after sinking) | `R` | touch |
-| Quit | `ESC` / window close | system back |
+| Pause | `P` / `Esc` | `P`/`Esc` or the pause pill (top-right HUD) |
+| Mute | `M` | `M` or the pause MU pill / menu mute pill |
+| Restart | `R` (run, pause or game-over) | touch |
+| Quit | `ESC` from a menu / window close | system back |
 
 ---
 
 ## 🧪 Development notes
 
 - **Procedural everything:** textures come from `Pixmap` drawing loops; sound
-  effects are synthesized into WAV buffers at startup in `AudioManager` (even
-  the "bubbles"), so the repo holds **zero** binary assets.
-- **Config cache:** the project is configuration-cache compatible — the build
-  reads are cached across runs (removing the non-serializable `natives` config
-  reference from the copy task is what fixed this).
+  effects and the looping ambience are synthesized into WAV buffers at startup
+  in `AudioManager` — the repo holds **zero** binary assets.
+- **Meta-progression:** `Profile` (pearl wallet, upgrades, lifetime stats,
+  difficulty, daily bonus) is the single source of truth over the `depthdiver`
+  prefs; `Leaderboard` and `Achievements` each own their own prefs file.
+- **Waterfall payouts:** pearls from the shop costs, mid-run `QUICK BUY`,
+  milestone banners and the Leviathan bonus all flow through `Profile.addPearls`
+  and are reported on the game-over **RUN SUMMARY**.
+- **Upgrade math** (`Profile.Upgrade`): OXYGEN `+15%` capacity, SPEED `+8%`,
+  COMBO `+2 s` window, SHIELD periodic shield, PEARL VALUE `+50%`; costs scale
+  `baseCost × level`.
 - **Entities:** `sealed class Pickup`/`Hazard` hierarchies in
   `core/.../entity/`, driven each frame from `DepthDiverGame.render()`.
+- **Config cache:** the project is configuration-cache compatible.
 
 ---
 
