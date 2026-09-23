@@ -30,6 +30,9 @@ gets** — and your **oxygen is always draining**.
 | 🎚️ Difficulty | EASY / NORMAL / HARD on the main menu, tuning oxygen drain, scroll speed and spawn rates |
 | 🏅 Achievements | 9 milestones (depth, lifetime pearls, dives) with gold unlock banners and a dedicated screen |
 | 🎁 Daily bonus | **+25 pearls** for your first dive of each day |
+| 🎮 Daily challenge | A rotating per-day objective (reach a depth / collect pearls / score) worth **+40 pearls**, with live progress on the profile screen |
+| 🌊 Atmosphere | Four depth-zone color palettes, drifting fish schools, god rays, a fading surface glow, and a low-oxygen vignette warning |
+| 🌐 CI | GitHub Actions runs the headless test suite + desktop compile, and assembles the debug APK |
 | ⏸️ Pause | `P` / `Esc` toggles a pause overlay with resume / restart / mute / quick-buy |
 | 🏆 Persistence | Best depth + best score + **top-5 leaderboard** saved via libGDX `Preferences` |
 
@@ -55,6 +58,7 @@ DepthDiver/
 │       ├── AudioManager.kt        # procedural WAV synthesizer (SFX + ambience)
 │       ├── Widgets.kt             # procedural pill/panel/text UI helpers
 │       ├── Profile.kt             # wallet, lifetime stats, upgrades, difficulty, daily bonus
+│       ├── Challenge.kt           # deterministic/day-indexed daily challenge
 │       ├── Leaderboard.kt         # top-5 persistence
 │       ├── Achievements.kt        # 9 milestone definitions + unlock flags
 │       └── entity/                # Pickup (Pearl, OxygenTank), Hazard (Rock, Mine, Jellyfish, Shark, Eel)
@@ -85,9 +89,10 @@ full `package.Class` when launching via `adb`); the desktop entry point is
 | Build | Gradle wrapper, [version catalog](gradle/libs.versions.toml), configuration-cache-friendly |
 | Target SDKs | Android `minSdk 24` / `targetSdk 37`, Java 11 source-level |
 
-There is **no unused dependency**: the catalog was pruned of the appcompat /
-core-ktx / junit / espresso entries that the Android Studio template ships but
-this project doesn't use. `Material` is only referenced by the Android theme.
+There is **no unused bundled asset**: everything (textures, SFX, ambience) is
+procedurally generated at runtime. Dependencies are pinned in the version
+catalog and pruned to what the game actually uses; `junit` / `kotlin-test-junit`
+are kept solely for the headless test suite.
 
 ---
 
@@ -160,9 +165,12 @@ adb shell am start -n app.depthdiver/app.deepdepthdiver.AndroidLauncher
 - **Entities:** `sealed class Pickup`/`Hazard` hierarchies in
   `core/.../entity/`, driven each frame from `DepthDiverGame.render()`.
 - **Tests:** headless JVM unit tests for the persistence logic (leaderboard
-  ranking, upgrade cost math, daily bonus, achievements gating) run with
-  `./gradlew :core:test` — they inject `TestPreferences`, an in-memory
-  `Preferences` so `Gdx` isn't required.
+  ranking, upgrade cost math, daily bonus, achievements gating, challenge
+  rotation) run with `./gradlew :core:test` — they inject `TestPreferences`, an
+  in-memory `Preferences` so `Gdx` isn't required.
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the headless tests
+  and a desktop compile on every push/PR, and assembles the debug APK against
+  a setup Android SDK.
 - **Config cache:** the project is configuration-cache compatible.
 
 ---
