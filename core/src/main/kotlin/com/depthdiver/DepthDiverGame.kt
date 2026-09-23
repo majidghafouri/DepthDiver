@@ -104,6 +104,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var jellyfishTex: Texture
     private lateinit var sharkTex: Texture
     private lateinit var eelTex: Texture
+    private lateinit var fishTex: Texture
     private lateinit var pearlTex: Texture
     private lateinit var oxyTex: Texture
     private lateinit var uiPixel: Texture
@@ -294,6 +295,18 @@ class DepthDiverGame : ApplicationAdapter() {
         eelTex = Texture(eelPix)
         eelPix.dispose()
 
+        val fishPix = Pixmap(28, 14, Pixmap.Format.RGBA8888)
+        fishPix.setColor(0.45f, 0.75f, 0.95f, 1f)
+        fishPix.fillCircle(12, 7, 5)
+        fishPix.setColor(0.65f, 0.85f, 1f, 1f)
+        fishPix.fillCircle(16, 8, 3)
+        fishPix.setColor(0.45f, 0.75f, 0.95f, 1f)
+        fishPix.fillTriangle(9, 7, 2, 3, 2, 11)
+        fishPix.setColor(0.1f, 0.15f, 0.25f, 1f)
+        fishPix.fillCircle(21, 8, 1)
+        fishTex = Texture(fishPix)
+        fishPix.dispose()
+
         reset()
         state = GameState.MAIN_MENU
     }
@@ -377,6 +390,7 @@ class DepthDiverGame : ApplicationAdapter() {
         jellyfishTex.dispose()
         sharkTex.dispose()
         eelTex.dispose()
+        fishTex.dispose()
         pearlTex.dispose()
         oxyTex.dispose()
         audio.dispose()
@@ -1108,7 +1122,55 @@ class DepthDiverGame : ApplicationAdapter() {
             batch.setColor(1f, 1f, 1f, 0.045f)
             batch.draw(uiPixel, x - 70f, y - 1f, 140f, 2f)
         }
+
+        drawAmbientFish()
+
+        val surface = (1f - (depth / 40f)).coerceIn(0f, 1f)
+        if (surface > 0.05f) {
+            val rayCount = 4
+            for (i in 0 until rayCount) {
+                val sway = MathUtils.sin(elapsed * 0.35f + i * 1.3f) * 14f
+                val baseX = worldWidth * (0.16f + i * 0.24f) + sway
+                val rayH = worldHeight * (0.16f + (i % 2) * 0.06f)
+                val segments = 6
+                for (s in 0 until segments) {
+                    val t = (s + 1) / segments.toFloat()
+                    val alpha = 0.05f * surface * (1f - t * 0.85f)
+                    val w = 26f - t * 12f
+                    batch.setColor(0.75f, 0.95f, 1f, alpha)
+                    batch.draw(uiPixel, baseX - w / 2f, worldHeight - rayH * t, w, rayH * (t - (s) / segments.toFloat()) + 1f)
+                }
+            }
+            batch.setColor(1f, 1f, 1f, 0.07f * surface)
+            batch.draw(uiPixel, 0f, worldHeight - 40f, worldWidth, 40f)
+        }
         batch.setColor(1f, 1f, 1f, 1f)
+    }
+
+    private fun drawAmbientFish() {
+        val fishCount = 9
+        val scale = if (worldWidth >= 1200f) 1.15f else 0.9f
+        for (i in 0 until fishCount) {
+            val laneFrac = ((i * 29) % 100) / 100f
+            val baseY = worldHeight * (0.08f + laneFrac * 0.78f)
+            val speed = 20f + (i % 4) * 9f
+            val span = worldWidth + 180f
+            val dir = if ((i % 2) == 0) 1 else -1
+            val cx = if (dir == 1) {
+                (elapsed * speed % span) - 90f
+            } else {
+                span - (elapsed * speed % span) - 90f
+            }
+            val cy = baseY + MathUtils.sin(elapsed * 1.1f + i * 2.1f) * 7f
+            val size = (22f + (i % 3) * 7f) * scale
+            val alpha = 0.10f + (i % 3) * 0.05f
+            batch.setColor(0.7f, 0.9f, 1f, alpha)
+            if (dir == 1) {
+                batch.draw(fishTex, cx, cy, size, size * 0.5f)
+            } else {
+                batch.draw(fishTex, cx + size, cy, -size, size * 0.5f)
+            }
+        }
     }
 
     private fun drawMainMenu() {
