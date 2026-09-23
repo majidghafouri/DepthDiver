@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Preferences
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.math.MathUtils
+import java.util.Random
 
 class AudioManager {
 
@@ -11,6 +12,8 @@ class AudioManager {
     private var oxygen: Sound? = null
     private var crash: Sound? = null
     private var click: Sound? = null
+    private var ambience: Sound? = null
+    private var ambiencePlaying = false
     private var initialized = false
     private var prefs: Preferences? = null
 
@@ -18,6 +21,12 @@ class AudioManager {
         set(value) {
             field = value
             prefs?.putBoolean("muted", value)?.flush()
+            if (value) {
+                ambience?.stop()
+                ambiencePlaying = false
+            } else {
+                startAmbience()
+            }
         }
 
     fun init() {
@@ -29,6 +38,14 @@ class AudioManager {
         oxygen = generateSound("oxygen", 640f, 0.2f)
         crash = generateSound("crash", 120f, 0.35f)
         click = generateSound("click", 1400f, 0.05f)
+        ambience = generateAmbience()
+        if (!muted) startAmbience()
+    }
+
+    private fun startAmbience() {
+        if (ambiencePlaying) return
+        ambience?.loop(0.25f)
+        ambiencePlaying = true
     }
 
     fun toggleMute() {
@@ -52,14 +69,17 @@ class AudioManager {
     }
 
     fun dispose() {
+        ambience?.stop()
         pickup?.dispose()
         oxygen?.dispose()
         crash?.dispose()
         click?.dispose()
+        ambience?.dispose()
         pickup = null
         oxygen = null
         crash = null
         click = null
+        ambience = null
         initialized = false
     }
 
@@ -74,23 +94,51 @@ class AudioManager {
         }
     }
 
+    /** 14s calming underwater ambience: low drone with a slow tide LFO plus sparse bubbling blips, looped. */
+    private fun generateAmbience(): Sound? {
+        return try {
+            val sampleRate = 22050
+            val duration = 14f
+            val samples = (sampleRate * duration).toInt()
+            val data = wavContainer(samples)
+            val rnd = Random(7)
+            var nextBlip = 1.2f
+            var blipT = -1f
+            for (i in 0 until samples) {
+                val t = i / sampleRate.toFloat()
+                val tide = 0.7f + 0.3f * MathUtils.sin(MathUtils.PI2 * 0.08f * t)
+                var wave = (MathUtils.sin(MathUtils.PI2 * 55f * t) * 0.30f +
+                    MathUtils.sin(MathUtils.PI2 * 110f * t) * 0.11f) * tide
+                if (blipT >= 0f) {
+                    val age = t - blipT
+                    if (age < 0.4f) {
+                        val env = 1f - age / 0.4f
+                        val f = 380f + 900f * age
+                        wave += MathUtils.sin(MathUtils.PI2 * f * t) * env * 0.16f
+                    } else {
+                        blipT = -1f
+                    }
+                }
+                if (blipT < 0f && t >= nextBlip) {
+                    blipT = t
+                    nextBlip = t + 1.2f + rnd.nextFloat() * 1.8f
+                }
+                val sample = (wave * Short.MAX_VALUE * 0.6f).toInt().coerceIn(-Short.MAX_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                data[44 + i * 2] = (sample and 0xFF).toByte()
+                data[44 + i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
+            }
+            val file = Gdx.files.local("audio-runtime/ambience.wav")
+            file.writeBytes(data, false)
+            Gdx.audio.newSound(file)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun generateWav(freq: Float, duration: Float): ByteArray {
         val sampleRate = 22050
         val samples = (sampleRate * duration).toInt()
-        val data = ByteArray(44 + samples * 2)
-        writeAscii(data, 0, "RIFF")
-        writeIntLe(data, 4, 36 + samples * 2)
-        writeAscii(data, 8, "WAVE")
-        writeAscii(data, 12, "fmt ")
-        writeIntLe(data, 16, 16)
-        writeShortLe(data, 20, 1)
-        writeShortLe(data, 22, 1)
-        writeIntLe(data, 24, sampleRate)
-        writeIntLe(data, 28, sampleRate * 2)
-        writeShortLe(data, 32, 2)
-        writeShortLe(data, 34, 16)
-        writeAscii(data, 36, "data")
-        writeIntLe(data, 40, samples * 2)
+        val data = wavContainer(samples)
         for (i in 0 until samples) {
             val t = i / sampleRate.toFloat()
             val env = (1f - t / duration).coerceIn(0f, 1f)
@@ -100,6 +148,24 @@ class AudioManager {
             data[44 + i * 2] = (sample and 0xFF).toByte()
             data[44 + i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
         }
+        return data
+    }
+
+    private fun wavContainer(samples: Int): ByteArray {
+        val data = ByteArray(44 + samples * 2)
+        writeAscii(data, 0, "RIFF")
+        writeIntLe(data, 4, 36 + samples * 2)
+        writeAscii(data, 8, "WAVE")
+        writeAscii(data, 12, "fmt ")
+        writeIntLe(data, 16, 16)
+        writeShortLe(data, 20, 1)
+        writeShortLe(data, 22, 1)
+        writeIntLe(data, 24, 22050)
+        writeIntLe(data, 28, 22050 * 2)
+        writeShortLe(data, 32, 2)
+        writeShortLe(data, 34, 16)
+        writeAscii(data, 36, "data")
+        writeIntLe(data, 40, samples * 2)
         return data
     }
 
