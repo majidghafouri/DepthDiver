@@ -590,10 +590,22 @@ class DepthDiverGame : ApplicationAdapter() {
                     goToMenu()
                     return
                 }
-                if (Gdx.input.isKeyJustPressed(Input.Keys.R) || Gdx.input.justTouched()) {
+                if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
                     reset()
+                    return
                 }
-                return
+                if (Gdx.input.justTouched()) {
+                    val tx = touchX()
+                    val ty = touchY()
+                    val pillY = worldHeight / 2f - 118f
+                    val menu = Strings.t("menu")
+                    if (Widgets.contains(tx, ty, worldWidth / 2f + 95f, pillY, Widgets.pillW(font, menu), Widgets.pillH(font, menu))) {
+                        goToMenu()
+                    } else {
+                        reset()
+                    }
+                    return
+                }
             }
         }
 
@@ -1026,6 +1038,10 @@ class DepthDiverGame : ApplicationAdapter() {
                 font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + glyphLayout.height / 2f + 16f + lineHeight * 1.6f)
             }
             font.color = Color.WHITE
+
+            val pillY = centerY - 118f
+            Widgets.pill(batch, font, uiPixel, centerX - 95f, pillY, Strings.t("restart"))
+            Widgets.pill(batch, font, uiPixel, centerX + 95f, pillY, Strings.t("menu"))
         }
     }
 
