@@ -50,7 +50,10 @@ object Strings {
         "newRecord" to "NEW RECORD!",
         "top5" to "ENTERED TOP 5!",
         "rank" to "RANK",
-        "noRuns" to "NO RUNS YET"
+        "noRuns" to "NO RUNS YET",
+        "level" to "LVL",
+        "buy" to "BUY",
+        "max" to "MAX"
     )
     private val locale = EN
 
@@ -157,11 +160,7 @@ class DepthDiverGame : ApplicationAdapter() {
         prefs = Gdx.app.getPreferences("depthdiver")
         bestDepth = prefs.getFloat("bestDepth", 0f)
         bestScore = prefs.getInteger("bestScore", 0)
-        upgradeOxygenLevel = Profile.level(Profile.Upgrade.Oxygen)
-        upgradeSpeedLevel = Profile.level(Profile.Upgrade.Speed)
-        upgradeComboLevel = Profile.level(Profile.Upgrade.Combo)
-        upgradeShieldLevel = Profile.level(Profile.Upgrade.Shield)
-        upgradePearlValueLevel = Profile.level(Profile.Upgrade.PearlValue)
+        refreshUpgradeLevels()
         applyUpgrades()
         audio.init()
         restoreInterruptedRun()
@@ -399,7 +398,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     }
                     is Pickup.Pearl -> {
                         combo += 1
-                        comboTimer = 5f
+                        comboTimer = 5f + upgradeComboLevel * 2f
                         val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5)).toInt()
                         score += pearlValue * combo
                         Profile.addPearls(pearlValue)
@@ -540,7 +539,11 @@ class DepthDiverGame : ApplicationAdapter() {
                     return
                 }
                 if (Gdx.input.justTouched()) {
-                    handleSubScreenTouch(touchX(), touchY())
+                    if (state == GameState.SHOP) {
+                        handleShopTouch(touchX(), touchY())
+                    } else {
+                        handleSubScreenTouch(touchX(), touchY())
+                    }
                 }
             }
 
@@ -664,6 +667,70 @@ class DepthDiverGame : ApplicationAdapter() {
         if (Widgets.contains(tx, ty, worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, label), Widgets.pillH(font, label))) {
             goToMenu()
         }
+    }
+
+    private fun shopBuyLabel(u: Profile.Upgrade): String {
+        val cost = Profile.upgradeCost(u)
+        return if (cost == null) Strings.t("max") else "${Strings.t("buy")} $cost"
+    }
+
+    private class ShopRect(val cx: Float, val cy: Float, val w: Float, val h: Float)
+
+    private fun shopPanel(): ShopRect {
+        val panelW = min(worldWidth * 0.82f, worldHeight * 1.35f).coerceAtMost(560f)
+        val panelH = worldHeight * 0.58f
+        return ShopRect(worldWidth / 2f, worldHeight / 2f, panelW, panelH)
+    }
+
+    private fun shopRowCy(index: Int, panel: ShopRect): Float {
+        val lineGap = min(52f, panel.h / (Profile.Upgrade.values().size + 1))
+        return panel.cy + panel.h / 2f - 50f - lineGap * index
+    }
+
+    private fun shopBuyPill(u: Profile.Upgrade, panel: ShopRect, index: Int): ShopRect {
+        val label = shopBuyLabel(u)
+        return ShopRect(
+            panel.cx + panel.w / 2f - 82f,
+            shopRowCy(index, panel),
+            Widgets.pillW(font, label),
+            Widgets.pillH(font, label)
+        )
+    }
+
+    private fun handleShopTouch(tx: Float, ty: Float) {
+        val back = Strings.t("back")
+        if (Widgets.contains(tx, ty, worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, back), Widgets.pillH(font, back))) {
+            goToMenu()
+            return
+        }
+        val panel = shopPanel()
+        Profile.Upgrade.values().forEachIndexed { i, u ->
+            if (Profile.isMaxed(u)) return@forEachIndexed
+            val pill = shopBuyPill(u, panel, i)
+            if (Widgets.contains(tx, ty, pill.cx, pill.cy, pill.w, pill.h)) {
+                buyUpgrade(u)
+                return
+            }
+        }
+    }
+
+    private fun buyUpgrade(u: Profile.Upgrade) {
+        val cost = Profile.upgradeCost(u) ?: return
+        if (Profile.pearls() < cost) return
+        Profile.spendPearls(cost)
+        Profile.setLevel(u, Profile.level(u) + 1)
+        refreshUpgradeLevels()
+        applyUpgrades()
+        audio.playClick()
+    }
+
+    private fun refreshUpgradeLevels() {
+        upgradeOxygenLevel = Profile.level(Profile.Upgrade.Oxygen)
+        upgradeSpeedLevel = Profile.level(Profile.Upgrade.Speed)
+        upgradeComboLevel = Profile.level(Profile.Upgrade.Combo)
+        upgradeShieldLevel = Profile.level(Profile.Upgrade.Shield)
+        upgradePearlValueLevel = Profile.level(Profile.Upgrade.PearlValue)
+        applyUpgrades()
     }
 
     private fun goToMenu() {
@@ -858,8 +925,26 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun drawShopScreen() {
         drawSubScreenHeader(Strings.t("shop"))
-        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight / 2f, worldWidth * 0.72f, worldHeight * 0.5f)
-        Widgets.text(batch, font, "${Strings.t("soon")}", worldWidth / 2f, worldHeight / 2f - 40f)
+        val panel = shopPanel()
+        Widgets.panel(batch, uiPixel, panel.cx, panel.cy, panel.w, panel.h)
+
+        font.color = Color.GOLD
+        Widgets.textRight(batch, font, "${Strings.t("pearls")}: ${Profile.pearls()}", panel.cx + panel.w / 2f - 30f, panel.cy + panel.h / 2f - 12f)
+
+        Profile.Upgrade.values().forEachIndexed { i, u ->
+            val cy = shopRowCy(i, panel)
+            val lvl = Profile.level(u)
+            val pill = shopBuyPill(u, panel, i)
+            val label = shopBuyLabel(u)
+            val affordable = !Profile.isMaxed(u) && Profile.pearls() >= (Profile.upgradeCost(u) ?: 0)
+
+            font.color = Color.WHITE
+            Widgets.textLeft(batch, font, u.label, panel.cx - panel.w / 2f + 30f, cy)
+            font.color = Color.CYAN
+            Widgets.textRight(batch, font, "${Strings.t("level")} $lvl/${Profile.MAX_LEVEL}", pill.cx - pill.w / 2f - 14f, cy)
+            Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, label, enabled = affordable)
+        }
+        font.color = Color.WHITE
     }
 
     private fun drawHud() {

@@ -30,6 +30,8 @@ object Profile {
         prefs.flush()
     }
 
+    fun spendPearls(n: Int) = addPearls(-n)
+
     fun lifetimePearls(): Int = prefs.getInteger("lifetimePearls", 0)
 
     fun addLifetimePearls(n: Int) {
