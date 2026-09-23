@@ -996,36 +996,36 @@ class DepthDiverGame : ApplicationAdapter() {
         val labels = listOf(Strings.t("resume")) + listOf(Strings.t("menu"))
         val centerX = worldWidth / 2f
         val centerY = worldHeight / 2f
-        val rowOffset = 44f
-        if (Widgets.contains(tx, ty, centerX, centerY + rowOffset, Widgets.pillW(font, labels[0]), Widgets.pillH(font, labels[0]))) {
+        val tall = worldHeight >= 540f
+        val r = pauseRows(tall)
+        if (Widgets.contains(tx, ty, centerX, centerY + r.resume, Widgets.pillW(font, labels[0]), Widgets.pillH(font, labels[0]))) {
             state = GameState.PLAYING
             audio.playClick()
             return
         }
-        if (Widgets.contains(tx, ty, centerX - 90f, centerY - rowOffset, Widgets.pillW(font, Strings.t("restart")), Widgets.pillH(font, Strings.t("restart")))) {
+        if (Widgets.contains(tx, ty, centerX - 90f, centerY + r.side, Widgets.pillW(font, Strings.t("restart")), Widgets.pillH(font, Strings.t("restart")))) {
             reset()
             audio.playClick()
             return
         }
-        if (Widgets.contains(tx, ty, centerX + 90f, centerY - rowOffset, Widgets.pillW(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")), Widgets.pillH(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")))) {
+        if (Widgets.contains(tx, ty, centerX + 90f, centerY + r.side, Widgets.pillW(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")), Widgets.pillH(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")))) {
             audio.toggleMute()
             audio.playClick()
             return
         }
-        if (Widgets.contains(tx, ty, centerX, centerY - 3f * rowOffset, Widgets.pillW(font, labels[1]), Widgets.pillH(font, labels[1]))) {
+        if (Widgets.contains(tx, ty, centerX, centerY + r.menu, Widgets.pillW(font, labels[1]), Widgets.pillH(font, labels[1]))) {
             goToMenu()
             audio.playClick()
             return
         }
-        if (worldHeight >= 540f) {
-            val buyCy = centerY - 5.5f * rowOffset
+        if (tall) {
             val oxyLabel = shopBuyLabel(Profile.Upgrade.Oxygen)
             val spdLabel = shopBuyLabel(Profile.Upgrade.Speed)
-            if (Widgets.contains(tx, ty, centerX - 90f, buyCy, Widgets.pillW(font, oxyLabel), Widgets.pillH(font, oxyLabel))) {
+            if (Widgets.contains(tx, ty, centerX - 90f, centerY + r.buy, Widgets.pillW(font, oxyLabel), Widgets.pillH(font, oxyLabel))) {
                 buyUpgrade(Profile.Upgrade.Oxygen)
                 return
             }
-            if (Widgets.contains(tx, ty, centerX + 90f, buyCy, Widgets.pillW(font, spdLabel), Widgets.pillH(font, spdLabel))) {
+            if (Widgets.contains(tx, ty, centerX + 90f, centerY + r.buy, Widgets.pillW(font, spdLabel), Widgets.pillH(font, spdLabel))) {
                 buyUpgrade(Profile.Upgrade.Speed)
                 return
             }
@@ -1683,52 +1683,73 @@ class DepthDiverGame : ApplicationAdapter() {
         font.color = Color.WHITE
     }
 
+    private data class PauseRows(
+        val title: Float,
+        val pearls: Float,
+        val resume: Float,
+        val side: Float,
+        val menu: Float,
+        val help: Float,
+        val buyLabel: Float,
+        val buy: Float,
+    )
+
+    private fun pauseSpacing(): Float = min(48f, worldHeight / 12f)
+
+    private fun pauseRows(tall: Boolean): PauseRows {
+        val s = pauseSpacing()
+        return if (tall) {
+            PauseRows(2.75f * s, 1.95f * s, 1.05f * s, -0.15f * s, -1.35f * s, -2.55f * s, -3.5f * s, -4.5f * s)
+        } else {
+            PauseRows(2.6f * s, Float.NaN, 1.05f * s, -0.15f * s, -1.35f * s, -2.6f * s, Float.NaN, Float.NaN)
+        }
+    }
+
     private fun drawPauseOverlay(glyphLayout: GlyphLayout, lineHeight: Float) {
         val centerX = worldWidth / 2f
         val centerY = worldHeight / 2f
-        val pillGap = 18f
-        val rowOffset = 44f
         val tall = worldHeight >= 540f
+        val r = pauseRows(tall)
+        val s = pauseSpacing()
+        val panelH = if (tall) 7.6f * s + lineHeight + 18f else 6.0f * s + 20f
 
-        Widgets.panel(batch, uiPixel, centerX, centerY, worldWidth * 0.72f, rowOffset * (if (tall) 4.6f else 3.2f))
+        Widgets.panel(batch, uiPixel, centerX, centerY, worldWidth * 0.76f, panelH)
 
         font.color = Color.CYAN
         val pausedStr = Strings.t("paused")
         glyphLayout.setText(font, pausedStr)
-        font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + rowOffset * 2.2f + lineHeight)
+        font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + r.title)
 
         if (tall) {
             font.color = Color.GOLD
             glyphLayout.setText(font, "${Strings.t("pearls")}: ${Profile.pearls()}")
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + rowOffset * 2.6f)
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + r.pearls)
         }
 
         font.color = Color.WHITE
-        Widgets.pill(batch, font, uiPixel, centerX, centerY + rowOffset, Strings.t("resume"))
+        Widgets.pill(batch, font, uiPixel, centerX, centerY + r.resume, Strings.t("resume"))
+        Widgets.pill(batch, font, uiPixel, centerX - 90f, centerY + r.side, Strings.t("restart"))
+        Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY + r.side, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
+        Widgets.pill(batch, font, uiPixel, centerX, centerY + r.menu, Strings.t("menu"))
 
-        Widgets.pill(batch, font, uiPixel, centerX - 90f, centerY - rowOffset, Strings.t("restart"))
-        Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY - rowOffset, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
-        Widgets.pill(batch, font, uiPixel, centerX, centerY - 3f * rowOffset, Strings.t("menu"))
+        font.color = Color.CYAN
+        val helpStr = "P/Esc ${Strings.t("resume").lowercase()}    R ${Strings.t("restart").lowercase()}    M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
+        glyphLayout.setText(font, helpStr)
+        font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + r.help)
+        font.color = Color.WHITE
 
         if (tall) {
             font.color = Color.CYAN
-            val helpStr = "P/Esc ${Strings.t("resume").lowercase()}    R ${Strings.t("restart").lowercase()}    M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
-            glyphLayout.setText(font, helpStr)
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - 3f * rowOffset - 30f)
-
-            font.color = Color.CYAN
             glyphLayout.setText(font, Strings.t("quickBuy"))
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - 4.7f * rowOffset)
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + r.buyLabel)
 
-            val buyCy = centerY - 5.5f * rowOffset
             val oxyLabel = shopBuyLabel(Profile.Upgrade.Oxygen)
             val spdLabel = shopBuyLabel(Profile.Upgrade.Speed)
             val oxyAffordable = !Profile.isMaxed(Profile.Upgrade.Oxygen) && Profile.pearls() >= (Profile.upgradeCost(Profile.Upgrade.Oxygen) ?: 0)
             val spdAffordable = !Profile.isMaxed(Profile.Upgrade.Speed) && Profile.pearls() >= (Profile.upgradeCost(Profile.Upgrade.Speed) ?: 0)
-            Widgets.pill(batch, font, uiPixel, centerX - 90f, buyCy, oxyLabel, enabled = oxyAffordable)
-            Widgets.pill(batch, font, uiPixel, centerX + 90f, buyCy, spdLabel, enabled = spdAffordable)
+            Widgets.pill(batch, font, uiPixel, centerX - 90f, centerY + r.buy, oxyLabel, enabled = oxyAffordable)
+            Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY + r.buy, spdLabel, enabled = spdAffordable)
         }
-        font.color = Color.WHITE
     }
 
     private fun playerRect() =
