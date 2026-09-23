@@ -48,6 +48,17 @@ object Widgets {
 
     fun textW(font: BitmapFont, s: String): Float = GlyphLayout(font, s).width
 
+    /** Left-aligned text; anchor is the baseline at (x, y). */
+    fun textLeft(batch: SpriteBatch, font: BitmapFont, s: String, x: Float, y: Float) {
+        font.draw(batch, s, x, y)
+    }
+
+    /** Right-aligned text; anchor is the baseline at (x, y). */
+    fun textRight(batch: SpriteBatch, font: BitmapFont, s: String, x: Float, y: Float) {
+        val layout = GlyphLayout(font, s)
+        font.draw(batch, layout, x - layout.width, y)
+    }
+
     /** Vertical stack position (cx, cy) for the [index]-th of [count] menu buttons.
      *  Tall screens use a single centered column; short (landscape) screens switch to a 2-column grid. */
     fun stack(worldW: Float, worldH: Float, index: Int, count: Int): Pair<Float, Float> {

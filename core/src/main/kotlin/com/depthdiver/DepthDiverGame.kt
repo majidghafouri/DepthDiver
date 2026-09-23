@@ -18,6 +18,7 @@ import com.badlogic.gdx.math.Rectangle
 import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
 import kotlin.math.max
+import kotlin.math.min
 
 object Strings {
     private val EN = mapOf(
@@ -42,7 +43,10 @@ object Strings {
         "back" to "BACK",
         "menu" to "MENU",
         "quit" to "QUIT",
-        "soon" to "coming soon"
+        "soon" to "coming soon",
+        "pearls" to "PEARLS",
+        "pearlsEarned" to "PEARLS EARNED",
+        "dives" to "DIVES"
     )
     private val locale = EN
 
@@ -88,7 +92,6 @@ class DepthDiverGame : ApplicationAdapter() {
     private var bestDepth = 0f
     private var bestScore = 0
 
-    private var totalPearls = 0
     private var upgradeOxygenLevel = 0
     private var upgradeSpeedLevel = 0
     private var upgradeComboLevel = 0
@@ -148,12 +151,11 @@ class DepthDiverGame : ApplicationAdapter() {
         prefs = Gdx.app.getPreferences("depthdiver")
         bestDepth = prefs.getFloat("bestDepth", 0f)
         bestScore = prefs.getInteger("bestScore", 0)
-        totalPearls = prefs.getInteger("totalPearls", 0)
-        upgradeOxygenLevel = prefs.getInteger("upgradeOxygen", 0)
-        upgradeSpeedLevel = prefs.getInteger("upgradeSpeed", 0)
-        upgradeComboLevel = prefs.getInteger("upgradeCombo", 0)
-        upgradeShieldLevel = prefs.getInteger("upgradeShield", 0)
-        upgradePearlValueLevel = prefs.getInteger("upgradePearlValue", 0)
+        upgradeOxygenLevel = Profile.level(Profile.Upgrade.Oxygen)
+        upgradeSpeedLevel = Profile.level(Profile.Upgrade.Speed)
+        upgradeComboLevel = Profile.level(Profile.Upgrade.Combo)
+        upgradeShieldLevel = Profile.level(Profile.Upgrade.Shield)
+        upgradePearlValueLevel = Profile.level(Profile.Upgrade.PearlValue)
         applyUpgrades()
         audio.init()
         restoreInterruptedRun()
@@ -394,9 +396,8 @@ class DepthDiverGame : ApplicationAdapter() {
                         comboTimer = 5f
                         val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5)).toInt()
                         score += pearlValue * combo
-                        totalPearls += pearlValue
-                        prefs.putInteger("totalPearls", totalPearls)
-                        prefs.flush()
+                        Profile.addPearls(pearlValue)
+                        Profile.addLifetimePearls(pearlValue)
                         audio.playPickup()
                         triggerShake(0.1f, 4f)
                         Gdx.input.vibrate(30)
@@ -790,8 +791,30 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun drawProfileScreen() {
         drawSubScreenHeader(Strings.t("profile"))
-        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight / 2f, worldWidth * 0.72f, worldHeight * 0.5f)
-        Widgets.text(batch, font, "${Strings.t("soon")}", worldWidth / 2f, worldHeight / 2f - 40f)
+        val panelCx = worldWidth / 2f
+        val panelCy = worldHeight / 2f
+        val panelW = min(worldWidth * 0.8f, worldHeight * 1.2f).coerceAtMost(520f)
+        val panelH = worldHeight * 0.58f
+        Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
+
+        val stats = listOf(
+            "${Strings.t("best")} ${Strings.t("depth")}" to "${bestDepth.toInt()} m",
+            "${Strings.t("best")} ${Strings.t("score")}" to "$bestScore",
+            Strings.t("pearls") to "${Profile.pearls()}",
+            Strings.t("pearlsEarned") to "${Profile.lifetimePearls()}",
+            Strings.t("dives") to "${Profile.dives()}"
+        )
+        val labelX = panelCx - panelW / 2f + 34f
+        val valueX = panelCx + panelW / 2f - 34f
+        val lineGap = min(46f, panelH / (stats.size + 1))
+        stats.forEachIndexed { i, (label, value) ->
+            val cy = panelCy + panelH / 2f - lineGap * (i + 1)
+            font.color = Color.WHITE
+            Widgets.textLeft(batch, font, label, labelX, cy)
+            font.color = Color.GOLD
+            Widgets.textRight(batch, font, value, valueX, cy)
+        }
+        font.color = Color.WHITE
     }
 
     private fun drawLeaderboardScreen() {
@@ -910,6 +933,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun endGame() {
         if (state == GameState.PLAYING) {
             state = GameState.GAME_OVER
+            Profile.recordDive()
             audio.playCrash()
         }
     }
