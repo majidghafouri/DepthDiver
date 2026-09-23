@@ -1042,7 +1042,7 @@ class DepthDiverGame : ApplicationAdapter() {
         batch.begin()
 
         if (inGame) {
-            drawWorld()
+            if (state == GameState.PAUSED) drawWorldBlurred() else drawWorld()
             drawHud()
         } else {
             when (state) {
@@ -1055,6 +1055,29 @@ class DepthDiverGame : ApplicationAdapter() {
             }
         }
         batch.end()
+    }
+
+    /** Renders the frozen game world into the same low-res FBO used by the menu and
+     *  composites it back upscaled (bilinear + dim tint) so the pause overlay pops. */
+    private fun drawWorldBlurred() {
+        ensureMenuFbo()
+        val fbo = menuFbo ?: return
+        batch.end()
+        fbo.begin()
+        Gdx.gl.glClearColor(0.02f, 0.12f, 0.25f, 1f)
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
+        batch.projectionMatrix = camera.combined
+        batch.begin()
+        drawWorld()
+        batch.end()
+        fbo.end()
+        batch.projectionMatrix = camera.combined
+        batch.begin()
+        batch.setColor(1f, 1f, 1f, 0.9f)
+        batch.draw(fbo.colorBufferTexture, 0f, 0f, worldWidth, worldHeight)
+        batch.setColor(0f, 0.03f, 0.10f, 0.28f)
+        batch.draw(uiPixel, 0f, 0f, worldWidth, worldHeight)
+        batch.setColor(Color.WHITE)
     }
 
     private fun drawWorld() {
