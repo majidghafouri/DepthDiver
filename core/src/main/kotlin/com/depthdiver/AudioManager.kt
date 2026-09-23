@@ -10,6 +10,7 @@ class AudioManager {
     private var pickup: Sound? = null
     private var oxygen: Sound? = null
     private var crash: Sound? = null
+    private var click: Sound? = null
     private var initialized = false
     private var prefs: Preferences? = null
 
@@ -27,6 +28,7 @@ class AudioManager {
         pickup = generateSound("pickup", 880f, 0.14f)
         oxygen = generateSound("oxygen", 640f, 0.2f)
         crash = generateSound("crash", 120f, 0.35f)
+        click = generateSound("click", 1400f, 0.05f)
     }
 
     fun toggleMute() {
@@ -45,13 +47,19 @@ class AudioManager {
         if (!muted) crash?.play(0.9f)
     }
 
+    fun playClick() {
+        if (!muted) click?.play(0.5f)
+    }
+
     fun dispose() {
         pickup?.dispose()
         oxygen?.dispose()
         crash?.dispose()
+        click?.dispose()
         pickup = null
         oxygen = null
         crash = null
+        click = null
         initialized = false
     }
 

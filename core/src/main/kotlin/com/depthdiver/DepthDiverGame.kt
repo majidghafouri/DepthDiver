@@ -32,7 +32,17 @@ object Strings {
         "muteOff" to "MUTE OFF",
         "paused" to "PAUSED",
         "gameOver" to "GAME OVER",
-        "pressR" to "press R to restart"
+        "pressR" to "press R to restart",
+        "menuTitle" to "DEPTH DIVER",
+        "menuSubtitle" to "plunge into the abyss",
+        "play" to "PLAY",
+        "profile" to "PROFILE",
+        "leaderboard" to "LEADERBOARD",
+        "shop" to "SHOP",
+        "back" to "BACK",
+        "menu" to "MENU",
+        "quit" to "QUIT",
+        "soon" to "coming soon"
     )
     private val locale = EN
 
@@ -55,6 +65,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var batch: SpriteBatch
     private lateinit var camera: OrthographicCamera
     private lateinit var font: BitmapFont
+    private lateinit var titleFont: BitmapFont
     private lateinit var playerTex: Texture
     private lateinit var rockTex: Texture
     private lateinit var mineTex: Texture
@@ -122,6 +133,17 @@ class DepthDiverGame : ApplicationAdapter() {
             borderStraight = true
         }
         font = generator.generateFont(parameter)
+        titleFont = generator.generateFont(
+            FreeTypeFontGenerator.FreeTypeFontParameter().apply {
+                size = (worldHeight / 9f).toInt().coerceIn(36, 84)
+                color = Color(0.35f, 0.85f, 1f, 1f)
+                borderWidth = 2f
+                borderColor = Color(0.02f, 0.2f, 0.4f, 1f)
+                borderStraight = true
+                shadowOffsetY = 4
+                shadowColor = Color(0f, 0f, 0f, 0.6f)
+            }
+        )
         generator.dispose()
         prefs = Gdx.app.getPreferences("depthdiver")
         bestDepth = prefs.getFloat("bestDepth", 0f)
@@ -212,6 +234,7 @@ class DepthDiverGame : ApplicationAdapter() {
         sharkPix.fillCircle(22, 120, 3)
 
         reset()
+        state = GameState.MAIN_MENU
     }
 
     override fun resize(width: Int, height: Int) {
@@ -281,6 +304,7 @@ class DepthDiverGame : ApplicationAdapter() {
         batch.dispose()
         font.dispose()
         playerTex.dispose()
+        titleFont.dispose()
         rockTex.dispose()
         mineTex.dispose()
         jellyfishTex.dispose()
@@ -483,44 +507,82 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun handleInput() {
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || Gdx.input.isKeyJustPressed(Input.Keys.P)) {
-            state = if (state == GameState.PLAYING) GameState.PAUSED else GameState.PLAYING
-            return
-        }
-        if (Gdx.input.isKeyJustPressed(Input.Keys.M)) {
-            audio.toggleMute()
-            return
-        }
-        if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
-            reset()
-            return
-        }
+        val escJust = Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || Gdx.input.isKeyJustPressed(Input.Keys.BACK)
+        val pJust = Gdx.input.isKeyJustPressed(Input.Keys.P)
+        val mJust = Gdx.input.isKeyJustPressed(Input.Keys.M)
 
-        if (Gdx.input.justTouched()) {
-            val tx = Gdx.input.x.toFloat()
-            val ty = worldHeight - Gdx.input.y.toFloat()
-            if (state == GameState.PLAYING) {
-                if (pillAt(tx, ty, hudPauseCx, hudPauseCy, hudPauseW, hudPauseH)) {
+        when (state) {
+            GameState.MAIN_MENU -> {
+                if (escJust || pJust) {
+                    Gdx.app.exit()
+                    return
+                }
+                if (mJust) {
+                    audio.toggleMute()
+                    audio.playClick()
+                    return
+                }
+                if (Gdx.input.justTouched()) {
+                    handleMenuTouch(touchX(), touchY())
+                }
+            }
+
+            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP -> {
+                if (escJust || pJust) {
+                    goToMenu()
+                    return
+                }
+                if (Gdx.input.justTouched()) {
+                    handleSubScreenTouch(touchX(), touchY())
+                }
+            }
+
+            GameState.PLAYING -> {
+                if (escJust || pJust) {
+                    state = GameState.PAUSED
+                    return
+                }
+                if (mJust) {
+                    audio.toggleMute()
+                    return
+                }
+                if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
+                    reset()
+                    return
+                }
+                if (Gdx.input.justTouched() && Widgets.contains(touchX(), touchY(), hudPauseCx, hudPauseCy, hudPauseW, hudPauseH)) {
                     state = GameState.PAUSED
                     return
                 }
             }
-            if (state == GameState.PAUSED) {
-                if (pillAt(tx, ty, worldWidth / 2f, worldHeight / 2f + 48f, 140f, 34f)) {
+
+            GameState.PAUSED -> {
+                if (escJust || pJust) {
                     state = GameState.PLAYING
                     return
                 }
-                if (pillAt(tx, ty, worldWidth / 2f - 80f, worldHeight / 2f - 46f, 140f, 34f)) {
-                    reset()
-                    return
-                }
-                if (pillAt(tx, ty, worldWidth / 2f + 80f, worldHeight / 2f - 46f, 140f, 34f)) {
+                if (mJust) {
                     audio.toggleMute()
                     return
                 }
+                if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
+                    reset()
+                    return
+                }
+                if (Gdx.input.justTouched()) {
+                    handlePauseTouch(touchX(), touchY())
+                }
+                return
             }
-            if (state == GameState.GAME_OVER) {
-                reset()
+
+            GameState.GAME_OVER -> {
+                if (escJust || pJust) {
+                    goToMenu()
+                    return
+                }
+                if (Gdx.input.isKeyJustPressed(Input.Keys.R) || Gdx.input.justTouched()) {
+                    reset()
+                }
                 return
             }
         }
@@ -554,10 +616,106 @@ class DepthDiverGame : ApplicationAdapter() {
         playerY = (playerY + dy * playerSpeed * delta).coerceIn(playerRadius, worldHeight - playerRadius)
     }
 
+    private fun touchX(): Float = Gdx.input.x.toFloat()
+
+    private fun touchY(): Float = worldHeight - Gdx.input.y.toFloat()
+
+    private fun menuLabels(): List<String> = listOf(
+        Strings.t("play"),
+        Strings.t("profile"),
+        Strings.t("leaderboard"),
+        Strings.t("shop"),
+        if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"),
+        Strings.t("quit")
+    )
+
+    private fun handleMenuTouch(tx: Float, ty: Float) {
+        val labels = menuLabels()
+        for (i in labels.indices) {
+            val (cx, cy) = Widgets.stack(worldWidth, worldHeight, i, labels.size)
+            if (Widgets.contains(tx, ty, cx, cy, Widgets.pillW(font, labels[i]), Widgets.pillH(font, labels[i]))) {
+                engage(i)
+                return
+            }
+        }
+    }
+
+    private fun engage(index: Int) {
+        audio.playClick()
+        when (index) {
+            0 -> reset()
+            1 -> state = GameState.PROFILE
+            2 -> state = GameState.LEADERBOARD
+            3 -> state = GameState.SHOP
+            4 -> audio.toggleMute()
+            5 -> Gdx.app.exit()
+        }
+    }
+
+    private fun handleSubScreenTouch(tx: Float, ty: Float) {
+        val label = Strings.t("back")
+        if (Widgets.contains(tx, ty, worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, label), Widgets.pillH(font, label))) {
+            goToMenu()
+        }
+    }
+
+    private fun goToMenu() {
+        prefs.putBoolean("runSaved", false)
+        prefs.flush()
+        state = GameState.MAIN_MENU
+    }
+
+    private fun handlePauseTouch(tx: Float, ty: Float) {
+        val labels = listOf(Strings.t("resume")) + listOf(Strings.t("menu"))
+        val centerX = worldWidth / 2f
+        val centerY = worldHeight / 2f
+        val rowOffset = 44f
+        if (Widgets.contains(tx, ty, centerX, centerY + rowOffset, Widgets.pillW(font, labels[0]), Widgets.pillH(font, labels[0]))) {
+            state = GameState.PLAYING
+            audio.playClick()
+            return
+        }
+        if (Widgets.contains(tx, ty, centerX - 90f, centerY - rowOffset, Widgets.pillW(font, Strings.t("restart")), Widgets.pillH(font, Strings.t("restart")))) {
+            reset()
+            audio.playClick()
+            return
+        }
+        if (Widgets.contains(tx, ty, centerX + 90f, centerY - rowOffset, Widgets.pillW(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")), Widgets.pillH(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")))) {
+            audio.toggleMute()
+            audio.playClick()
+            return
+        }
+        if (Widgets.contains(tx, ty, centerX, centerY - 3f * rowOffset, Widgets.pillW(font, labels[1]), Widgets.pillH(font, labels[1]))) {
+            goToMenu()
+            audio.playClick()
+        }
+    }
+
     private fun draw() {
         Gdx.gl.glClearColor(0.02f, 0.12f, 0.25f, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
 
+        val inGame = state == GameState.PLAYING || state == GameState.PAUSED || state == GameState.GAME_OVER
+
+        batch.projectionMatrix = camera.combined
+        batch.begin()
+
+        if (inGame) {
+            drawWorld()
+            drawHud()
+        } else {
+            when (state) {
+                GameState.MAIN_MENU -> drawMainMenu()
+                GameState.PROFILE -> drawProfileScreen()
+                GameState.LEADERBOARD -> drawLeaderboardScreen()
+                GameState.SHOP -> drawShopScreen()
+                GameState.PLAYING, GameState.PAUSED, GameState.GAME_OVER -> {}
+            }
+        }
+        batch.end()
+    }
+
+    private fun drawWorld() {
         val originalCamX = camera.position.x
         val originalCamY = camera.position.y
         if (shakeTimer > 0f) {
@@ -566,9 +724,8 @@ class DepthDiverGame : ApplicationAdapter() {
             camera.position.x += MathUtils.random(-currentIntensity, currentIntensity)
             camera.position.y += MathUtils.random(-currentIntensity, currentIntensity)
             camera.update()
+            batch.projectionMatrix = camera.combined
         }
-        batch.projectionMatrix = camera.combined
-        batch.begin()
 
         batch.setColor(1f, 1f, 1f, 1f)
         for (particle in particles) {
@@ -606,7 +763,50 @@ class DepthDiverGame : ApplicationAdapter() {
             camera.update()
             batch.projectionMatrix = camera.combined
         }
+    }
 
+    private fun drawMainMenu() {
+        Widgets.text(batch, titleFont, Strings.t("menuTitle"), worldWidth / 2f, worldHeight * 0.86f)
+        if (worldHeight >= 520f) {
+            font.color = Color.CYAN
+            Widgets.text(batch, font, Strings.t("menuSubtitle"), worldWidth / 2f, worldHeight * 0.74f)
+        }
+        font.color = Color.WHITE
+        val labels = menuLabels()
+        for (i in labels.indices) {
+            val (cx, cy) = Widgets.stack(worldWidth, worldHeight, i, labels.size)
+            Widgets.pill(batch, font, uiPixel, cx, cy, labels[i])
+        }
+        font.color = Color.CYAN
+        Widgets.text(batch, font, "P/Esc ${Strings.t("pause").lowercase()} · M ${Strings.t("muteOff").lowercase()}", worldWidth / 2f, worldHeight * 0.05f)
+        font.color = Color.WHITE
+    }
+
+    private fun drawSubScreenHeader(title: String) {
+        Widgets.text(batch, titleFont, title, worldWidth / 2f, worldHeight * 0.84f)
+        val back = Strings.t("back")
+        Widgets.pill(batch, font, uiPixel, worldWidth / 2f, worldHeight * 0.08f, back)
+    }
+
+    private fun drawProfileScreen() {
+        drawSubScreenHeader(Strings.t("profile"))
+        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight / 2f, worldWidth * 0.72f, worldHeight * 0.5f)
+        Widgets.text(batch, font, "${Strings.t("soon")}", worldWidth / 2f, worldHeight / 2f - 40f)
+    }
+
+    private fun drawLeaderboardScreen() {
+        drawSubScreenHeader(Strings.t("leaderboard"))
+        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight / 2f, worldWidth * 0.72f, worldHeight * 0.5f)
+        Widgets.text(batch, font, "${Strings.t("soon")}", worldWidth / 2f, worldHeight / 2f - 40f)
+    }
+
+    private fun drawShopScreen() {
+        drawSubScreenHeader(Strings.t("shop"))
+        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight / 2f, worldWidth * 0.72f, worldHeight * 0.5f)
+        Widgets.text(batch, font, "${Strings.t("soon")}", worldWidth / 2f, worldHeight / 2f - 40f)
+    }
+
+    private fun drawHud() {
         val glyphLayout = GlyphLayout()
         font.color = Color.WHITE
 
@@ -614,9 +814,7 @@ class DepthDiverGame : ApplicationAdapter() {
         val lineHeight = glyphLayout.height
         val padding = 6f
         val lineSpacing = 8f
-        val lineSpacing2 = 6f
         val colGap = 22f
-        val hudPad = 6f
 
         var y = worldHeight - lineHeight - padding
 
@@ -627,7 +825,6 @@ class DepthDiverGame : ApplicationAdapter() {
 
         val scoreStr = "${Strings.t("score")}: $score"
         glyphLayout.setText(font, scoreStr)
-        val scoreW = glyphLayout.width
         val scoreX = 10f + depthW + colGap
         font.draw(batch, glyphLayout, scoreX, y)
 
@@ -636,8 +833,10 @@ class DepthDiverGame : ApplicationAdapter() {
         val bestW = glyphLayout.width
         val pausePillRight = worldWidth - 12f
         val pausePillW = 64f
+        var bestX = worldWidth - bestW - 12f
         val bestLimit = pausePillRight - pausePillW - 16f
-        val bestX = (worldWidth - bestW - 12f).coerceAtMost(bestLimit - bestW).coerceAtLeast(scoreX + glyphLayout.width + 16f)
+        if (bestX > bestLimit - bestW) bestX = bestLimit - bestW
+        if (bestX < scoreX + 16f) bestX = scoreX + 16f
         glyphLayout.setText(font, bestStr)
         font.draw(batch, glyphLayout, bestX, y)
 
@@ -646,39 +845,20 @@ class DepthDiverGame : ApplicationAdapter() {
         glyphLayout.setText(font, oxygenStr)
         font.draw(batch, glyphLayout, 10f, y)
 
+        var pauseW = pausePillW
+        var pauseH = 30f
         if (state == GameState.PLAYING) {
-            drawPill(batch, font, bestX + bestW / 2f, y - lineHeight / 2f, pausePillW, 30f, Strings.t("pause"))
+            val (w, h) = Widgets.pill(batch, font, uiPixel, bestX + bestW / 2f, y - lineHeight / 2f, Strings.t("pause"))
+            pauseW = w
+            pauseH = h
         }
         hudPauseCx = bestX + bestW / 2f
         hudPauseCy = y - lineHeight / 2f
-        hudPauseW = pausePillW
-        hudPauseH = 30f
+        hudPauseW = pauseW
+        hudPauseH = pauseH
 
         if (state == GameState.PAUSED) {
-            val centerX = worldWidth / 2f
-            val centerY = worldHeight / 2f
-            val pillW = 160f
-            val pillH = 38f
-            val pillGap = 18f
-            val rowOffset = 44f
-
-            font.color = Color.CYAN
-            val pausedStr = Strings.t("paused")
-            glyphLayout.setText(font, pausedStr)
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + rowOffset + pillH + pillGap + lineHeight)
-
-            font.color = Color.WHITE
-            drawPill(batch, font, centerX, centerY + rowOffset, pillW, pillH, Strings.t("resume"))
-
-            val rowY = centerY - rowOffset
-            drawPill(batch, font, centerX - pillW / 2f - pillGap / 2f, rowY, pillW, pillH, Strings.t("restart"))
-            drawPill(batch, font, centerX + pillW / 2f + pillGap / 2f, rowY, pillW, pillH, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
-
-            font.color = Color.CYAN
-            val helpStr = "P/Esc ${Strings.t("resume").lowercase()}    R ${Strings.t("restart").lowercase()}    M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
-            glyphLayout.setText(font, helpStr)
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, rowY - pillH / 2f - pillGap - 4f)
-            font.color = Color.WHITE
+            drawPauseOverlay(glyphLayout, lineHeight)
         }
         if (state == GameState.GAME_OVER) {
             val centerX = worldWidth / 2f
@@ -695,44 +875,37 @@ class DepthDiverGame : ApplicationAdapter() {
             font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f)
             font.color = Color.WHITE
         }
-        batch.end()
+    }
+
+    private fun drawPauseOverlay(glyphLayout: GlyphLayout, lineHeight: Float) {
+        val centerX = worldWidth / 2f
+        val centerY = worldHeight / 2f
+        val pillGap = 18f
+        val rowOffset = 44f
+
+        Widgets.panel(batch, uiPixel, centerX, centerY, worldWidth * 0.72f, rowOffset * 3.2f)
+
+        font.color = Color.CYAN
+        val pausedStr = Strings.t("paused")
+        glyphLayout.setText(font, pausedStr)
+        font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + rowOffset * 2.2f + lineHeight)
+
+        font.color = Color.WHITE
+        Widgets.pill(batch, font, uiPixel, centerX, centerY + rowOffset, Strings.t("resume"))
+
+        Widgets.pill(batch, font, uiPixel, centerX - 90f, centerY - rowOffset, Strings.t("restart"))
+        Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY - rowOffset, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
+        Widgets.pill(batch, font, uiPixel, centerX, centerY - 3f * rowOffset, Strings.t("menu"))
+
+        font.color = Color.CYAN
+        val helpStr = "P/Esc ${Strings.t("resume").lowercase()}    R ${Strings.t("restart").lowercase()}    M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
+        glyphLayout.setText(font, helpStr)
+        font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - 3f * rowOffset - 30f)
+        font.color = Color.WHITE
     }
 
     private fun playerRect() =
         Rectangle(playerX - playerRadius, playerY - playerRadius, playerRadius * 2f, playerRadius * 2f)
-
-    private fun pillAt(tx: Float, ty: Float, cx: Float, cy: Float, w: Float, h: Float): Boolean =
-        tx >= cx - w / 2f && tx <= cx + w / 2f && ty >= cy - h / 2f && ty <= cy + h / 2f
-
-    private fun drawPill(
-        batch: SpriteBatch,
-        font: BitmapFont,
-        cx: Float,
-        cy: Float,
-        w: Float,
-        h: Float,
-        label: String
-    ) {
-        val layout = GlyphLayout(font, label)
-        val w2 = layout.width + 26f
-        val h2 = layout.height + 16f
-        batch.setColor(0f, 0f, 0f, 0.30f)
-        batch.draw(uiPixel, cx - w2 / 2f + 4f, cy - h2 / 2f - 4f, w2, h2)
-        batch.setColor(0.14f, 0.24f, 0.42f, 0.90f)
-        batch.draw(uiPixel, cx - w2 / 2f, cy - h2 / 2f, w2, h2)
-        batch.setColor(0.34f, 0.52f, 0.78f, 0.55f)
-        batch.draw(uiPixel, cx - w2 / 2f, cy, w2, h2 / 2f)
-        batch.setColor(0.95f, 0.97f, 1f, 0.95f)
-        val b = 2f
-        batch.draw(uiPixel, cx - w2 / 2f, cy - h2 / 2f, w2, b)
-        batch.draw(uiPixel, cx - w2 / 2f, cy + h2 / 2f - b, w2, b)
-        batch.draw(uiPixel, cx - w2 / 2f, cy - h2 / 2f, b, h2)
-        batch.draw(uiPixel, cx + w2 / 2f - b, cy - h2 / 2f, b, h2)
-        batch.setColor(Color.WHITE)
-        font.color = Color.WHITE
-        font.draw(batch, layout, cx - layout.width / 2f, cy + layout.height / 2f)
-    }
-
 
     private fun endGame() {
         if (state == GameState.PLAYING) {
@@ -766,5 +939,5 @@ class DepthDiverGame : ApplicationAdapter() {
         state = GameState.PLAYING
     }
 
-    private enum class GameState { PLAYING, PAUSED, GAME_OVER }
+    private enum class GameState { MAIN_MENU, PLAYING, PAUSED, GAME_OVER, PROFILE, LEADERBOARD, SHOP }
 }
