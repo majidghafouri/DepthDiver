@@ -67,7 +67,10 @@ object Strings {
         "pearlsGained" to "PEARLS GAINED",
         "milestone" to "MILESTONE",
         "leviathan" to "LEVIATHAN AHEAD!",
-        "combo" to "COMBO"
+        "combo" to "COMBO",
+        "dailyBonus" to "DAILY FIRST-DIVE BONUS",
+        "dailyClaimed" to "DAILY BONUS: CLAIMED TODAY",
+        "dailyReady" to "DAILY BONUS: +25 READY"
     )
     private val locale = EN
 
@@ -1107,6 +1110,15 @@ class DepthDiverGame : ApplicationAdapter() {
             Widgets.textRight(batch, font, value, valueX, cy)
         }
         font.color = Color.WHITE
+        font.color = Color.GOLD
+        Widgets.text(
+            batch,
+            font,
+            if (Profile.claimedDailyDay() == Profile.dailyDay()) Strings.t("dailyClaimed") else Strings.t("dailyReady"),
+            panelCx,
+            panelCy - panelH / 2f - 22f
+        )
+        font.color = Color.WHITE
     }
 
     private fun drawAchievementsScreen() {
@@ -1418,6 +1430,16 @@ class DepthDiverGame : ApplicationAdapter() {
             leaderboardMade = Leaderboard.qualifies(score, depth)
             Leaderboard.submit(score, depth)
             Profile.recordDive()
+            val day = Profile.dailyDay()
+            if (Profile.claimedDailyDay() != day) {
+                Profile.claimDaily(day)
+                val bonus = 25
+                runPearls += bonus
+                Profile.addPearls(bonus)
+                Profile.addLifetimePearls(bonus)
+                achievementToast = "${Strings.t("dailyBonus")} +$bonus"
+                achievementToastTimer = 3f
+            }
             audio.playCrash()
         }
     }

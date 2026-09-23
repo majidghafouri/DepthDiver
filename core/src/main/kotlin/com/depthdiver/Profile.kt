@@ -50,6 +50,18 @@ object Profile {
 
     fun bestScore(): Int = prefs.getInteger("bestScore", 0)
 
+    // ---------- daily bonus ----------
+
+    /** Day index in UTC (24 h buckets) — avoids needing java.time on older Android. */
+    fun dailyDay(): Int = (System.currentTimeMillis() / 86_400_000L).toInt()
+
+    fun claimedDailyDay(): Int = prefs.getInteger("dailyDay", 0)
+
+    fun claimDaily(day: Int) {
+        prefs.putInteger("dailyDay", day)
+        prefs.flush()
+    }
+
     // ---------- settings ----------
 
     /** 0 = EASY, 1 = NORMAL, 2 = HARD. */
