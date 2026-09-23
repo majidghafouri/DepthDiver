@@ -71,6 +71,10 @@ object Strings {
         "dailyBonus" to "DAILY FIRST-DIVE BONUS",
         "dailyClaimed" to "DAILY BONUS: CLAIMED TODAY",
         "dailyReady" to "DAILY BONUS: +25 READY",
+        "chReach" to "CHALLENGE: REACH",
+        "chCollect" to "CHALLENGE: COLLECT",
+        "chScore" to "CHALLENGE: SCORE",
+        "chDone" to "CHALLENGE: COMPLETE TODAY",
         "zoneSunlit" to "SUNLIT COAST",
         "zoneReef" to "TURQUOISE REEF",
         "zoneMidnight" to "MIDNIGHT ZONE",
@@ -533,6 +537,18 @@ class DepthDiverGame : ApplicationAdapter() {
             Profile.addPearls(10)
             Profile.addLifetimePearls(10)
             achievementToast = "${Strings.t("milestone")} ${m.toInt()} M +10"
+            achievementToastTimer = 3f
+            audio.playAchieve()
+        }
+
+        val activeCh = Challenge.activeFor(Profile.dailyDay())
+        if (!Challenge.claimedFor(activeCh) && activeCh.met(depth, runPearls, score)) {
+            Challenge.claim(activeCh)
+            val bonus = Challenge.REWARD
+            runPearls += bonus
+            Profile.addPearls(bonus)
+            Profile.addLifetimePearls(bonus)
+            achievementToast = "${Strings.t("challengeDone")} +$bonus"
             achievementToastTimer = 3f
             audio.playAchieve()
         }
@@ -1262,6 +1278,14 @@ class DepthDiverGame : ApplicationAdapter() {
             panelCx,
             panelCy - panelH / 2f - 22f
         )
+        val activeCh = Challenge.activeFor(Profile.dailyDay())
+        val chText = if (Challenge.claimedFor(activeCh)) {
+            Strings.t("chDone")
+        } else {
+            activeCh.summary(bestDepth, Profile.lifetimePearls(), bestScore)
+        }
+        font.color = Color.CYAN
+        Widgets.text(batch, font, chText, panelCx, panelCy - panelH / 2f - 22f - 24f)
         font.color = Color.WHITE
     }
 
