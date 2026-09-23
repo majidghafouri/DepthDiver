@@ -61,7 +61,8 @@ object Strings {
         "open" to "OPEN",
         "locked" to "LOCKED",
         "allDone" to "ALL ACHIEVEMENTS UNLOCKED",
-        "bossCleared" to "LEVIATHAN CLEARED"
+        "bossCleared" to "LEVIATHAN CLEARED",
+        "quickBuy" to "QUICK BUY"
     )
     private val locale = EN
 
@@ -891,6 +892,20 @@ class DepthDiverGame : ApplicationAdapter() {
         if (Widgets.contains(tx, ty, centerX, centerY - 3f * rowOffset, Widgets.pillW(font, labels[1]), Widgets.pillH(font, labels[1]))) {
             goToMenu()
             audio.playClick()
+            return
+        }
+        if (worldHeight >= 540f) {
+            val buyCy = centerY - 5.5f * rowOffset
+            val oxyLabel = shopBuyLabel(Profile.Upgrade.Oxygen)
+            val spdLabel = shopBuyLabel(Profile.Upgrade.Speed)
+            if (Widgets.contains(tx, ty, centerX - 90f, buyCy, Widgets.pillW(font, oxyLabel), Widgets.pillH(font, oxyLabel))) {
+                buyUpgrade(Profile.Upgrade.Oxygen)
+                return
+            }
+            if (Widgets.contains(tx, ty, centerX + 90f, buyCy, Widgets.pillW(font, spdLabel), Widgets.pillH(font, spdLabel))) {
+                buyUpgrade(Profile.Upgrade.Speed)
+                return
+            }
         }
     }
 
@@ -1257,13 +1272,20 @@ class DepthDiverGame : ApplicationAdapter() {
         val centerY = worldHeight / 2f
         val pillGap = 18f
         val rowOffset = 44f
+        val tall = worldHeight >= 540f
 
-        Widgets.panel(batch, uiPixel, centerX, centerY, worldWidth * 0.72f, rowOffset * 3.2f)
+        Widgets.panel(batch, uiPixel, centerX, centerY, worldWidth * 0.72f, rowOffset * (if (tall) 4.6f else 3.2f))
 
         font.color = Color.CYAN
         val pausedStr = Strings.t("paused")
         glyphLayout.setText(font, pausedStr)
         font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + rowOffset * 2.2f + lineHeight)
+
+        if (tall) {
+            font.color = Color.GOLD
+            glyphLayout.setText(font, "${Strings.t("pearls")}: ${Profile.pearls()}")
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + rowOffset * 2.6f)
+        }
 
         font.color = Color.WHITE
         Widgets.pill(batch, font, uiPixel, centerX, centerY + rowOffset, Strings.t("resume"))
@@ -1272,10 +1294,24 @@ class DepthDiverGame : ApplicationAdapter() {
         Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY - rowOffset, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
         Widgets.pill(batch, font, uiPixel, centerX, centerY - 3f * rowOffset, Strings.t("menu"))
 
-        font.color = Color.CYAN
-        val helpStr = "P/Esc ${Strings.t("resume").lowercase()}    R ${Strings.t("restart").lowercase()}    M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
-        glyphLayout.setText(font, helpStr)
-        font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - 3f * rowOffset - 30f)
+        if (tall) {
+            font.color = Color.CYAN
+            val helpStr = "P/Esc ${Strings.t("resume").lowercase()}    R ${Strings.t("restart").lowercase()}    M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
+            glyphLayout.setText(font, helpStr)
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - 3f * rowOffset - 30f)
+
+            font.color = Color.CYAN
+            glyphLayout.setText(font, Strings.t("quickBuy"))
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - 4.7f * rowOffset)
+
+            val buyCy = centerY - 5.5f * rowOffset
+            val oxyLabel = shopBuyLabel(Profile.Upgrade.Oxygen)
+            val spdLabel = shopBuyLabel(Profile.Upgrade.Speed)
+            val oxyAffordable = !Profile.isMaxed(Profile.Upgrade.Oxygen) && Profile.pearls() >= (Profile.upgradeCost(Profile.Upgrade.Oxygen) ?: 0)
+            val spdAffordable = !Profile.isMaxed(Profile.Upgrade.Speed) && Profile.pearls() >= (Profile.upgradeCost(Profile.Upgrade.Speed) ?: 0)
+            Widgets.pill(batch, font, uiPixel, centerX - 90f, buyCy, oxyLabel, enabled = oxyAffordable)
+            Widgets.pill(batch, font, uiPixel, centerX + 90f, buyCy, spdLabel, enabled = spdAffordable)
+        }
         font.color = Color.WHITE
     }
 
@@ -1294,7 +1330,6 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun applyUpgrades() {
         maxOxygen = 1f + upgradeOxygenLevel * 0.15f
-        oxygen = maxOxygen
         playerSpeed = 320f * (1f + upgradeSpeedLevel * 0.08f)
     }
 
@@ -1306,6 +1341,7 @@ class DepthDiverGame : ApplicationAdapter() {
         startBestScore = bestScore
         leaderboardMade = false
         applyUpgrades()
+        oxygen = maxOxygen
         elapsed = 0f
         hazardTimer = 1f
         pickupTimer = 2f
