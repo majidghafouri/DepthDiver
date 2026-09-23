@@ -997,7 +997,8 @@ class DepthDiverGame : ApplicationAdapter() {
         val centerX = worldWidth / 2f
         val centerY = worldHeight / 2f
         val tall = worldHeight >= 540f
-        val r = pauseRows(tall)
+        val lineHeight = GlyphLayout(font, "Hg").height
+        val r = pauseRows(tall, lineHeight)
         if (Widgets.contains(tx, ty, centerX, centerY + r.resume, Widgets.pillW(font, labels[0]), Widgets.pillH(font, labels[0]))) {
             state = GameState.PLAYING
             audio.playClick()
@@ -1528,19 +1529,6 @@ class DepthDiverGame : ApplicationAdapter() {
         val scoreX = 10f + depthW + colGap
         font.draw(batch, glyphLayout, scoreX, y)
 
-        val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore"
-        glyphLayout.setText(font, bestStr)
-        val bestW = glyphLayout.width
-        var bestX = worldWidth - bestW - 12f
-        if (bestX < scoreX + 16f) bestX = scoreX + 16f
-        glyphLayout.setText(font, bestStr)
-        font.draw(batch, glyphLayout, bestX, y)
-
-        y -= lineHeight + lineSpacing
-        val oxygenStr = "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%"
-        glyphLayout.setText(font, oxygenStr)
-        font.draw(batch, glyphLayout, 10f, y)
-
         font.color = Color.CYAN
         glyphLayout.setText(font, difficultyLabel())
         font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, y)
@@ -1549,33 +1537,22 @@ class DepthDiverGame : ApplicationAdapter() {
         if (bossWarning > 0f) {
             font.color = Color(1f, 0.35f, 0.3f, 1f)
             glyphLayout.setText(font, Strings.t("leviathan"))
-            font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, y - lineHeight * 1.4f)
+            font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, y - lineHeight * 1.4f)
             font.color = Color.WHITE
         }
 
-        if (state == GameState.PLAYING && combo > 1) {
-            font.color = Color.GOLD
-            glyphLayout.setText(font, "${Strings.t("combo")} x$combo")
-            val comboY = y - lineHeight * 2.8f
-            font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, comboY)
-            val barW = 90f
-            val barH = 5f
-            val frac = (comboTimer / maxComboWindow).coerceIn(0f, 1f)
-            batch.setColor(0f, 0f, 0f, 0.6f)
-            batch.draw(uiPixel, worldWidth - 10f - barW, comboY - lineHeight * 0.4f - barH, barW, barH)
-            batch.setColor(1f, 0.85f, 0.2f, 1f)
-            batch.draw(uiPixel, worldWidth - 10f - barW, comboY - lineHeight * 0.4f - barH, barW * frac, barH)
-            batch.setColor(1f, 1f, 1f, 1f)
-            font.color = Color.WHITE
-        }
+        y -= lineHeight + lineSpacing
+        val oxygenStr = "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%"
+        glyphLayout.setText(font, oxygenStr)
+        font.draw(batch, glyphLayout, 10f, y)
 
+        y -= lineHeight + lineSpacing
         if (state == GameState.PLAYING) {
             val pl = Strings.t("pause")
             val plW = Widgets.pillW(font, pl)
             val plH = Widgets.pillH(font, pl)
-            val row3Y = y - lineHeight - lineSpacing
             val plCX = worldWidth - 12f - plW / 2f
-            val plCY = row3Y - plH / 2f + lineHeight / 2f
+            val plCY = y
             val (w, h) = Widgets.pill(batch, font, uiPixel, plCX, plCY, pl)
             hudPauseW = w
             hudPauseH = h
@@ -1585,7 +1562,28 @@ class DepthDiverGame : ApplicationAdapter() {
             hudPauseW = worldWidth * 0.1f
             hudPauseH = worldHeight * 0.05f
             hudPauseCx = worldWidth - 12f - hudPauseW / 2f
-            hudPauseCy = y - lineHeight * 1.5f - lineSpacing
+            hudPauseCy = y
+        }
+
+        y -= lineHeight + lineSpacing
+        val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore"
+        glyphLayout.setText(font, bestStr)
+        font.draw(batch, glyphLayout, 10f, y)
+
+        if (state == GameState.PLAYING && combo > 1) {
+            font.color = Color.GOLD
+            glyphLayout.setText(font, "${Strings.t("combo")} x$combo")
+            val comboY = y - lineHeight * 1.5f
+            font.draw(batch, glyphLayout, 10f, comboY)
+            val barW = 90f
+            val barH = 5f
+            val frac = (comboTimer / maxComboWindow).coerceIn(0f, 1f)
+            batch.setColor(0f, 0f, 0f, 0.6f)
+            batch.draw(uiPixel, 10f, comboY - lineHeight * 0.6f - barH, barW, barH)
+            batch.setColor(1f, 0.85f, 0.2f, 1f)
+            batch.draw(uiPixel, 10f, comboY - lineHeight * 0.6f - barH, barW * frac, barH)
+            batch.setColor(1f, 1f, 1f, 1f)
+            font.color = Color.WHITE
         }
 
         if (state == GameState.PAUSED) {
@@ -1694,14 +1692,14 @@ class DepthDiverGame : ApplicationAdapter() {
         val buy: Float,
     )
 
-    private fun pauseSpacing(): Float = min(48f, worldHeight / 12f)
+    private fun pauseSpacing(lineHeight: Float): Float = lineHeight + 28f
 
-    private fun pauseRows(tall: Boolean): PauseRows {
-        val s = pauseSpacing()
+    private fun pauseRows(tall: Boolean, lineHeight: Float): PauseRows {
+        val s = pauseSpacing(lineHeight)
         return if (tall) {
-            PauseRows(2.75f * s, 1.95f * s, 1.05f * s, -0.15f * s, -1.35f * s, -2.55f * s, -3.5f * s, -4.5f * s)
+            PauseRows(3.0f * s, 2.0f * s, 1.0f * s, 0.0f * s, -1.0f * s, -2.0f * s, -3.0f * s, -4.0f * s)
         } else {
-            PauseRows(2.6f * s, Float.NaN, 1.05f * s, -0.15f * s, -1.35f * s, -2.6f * s, Float.NaN, Float.NaN)
+            PauseRows(2.5f * s, Float.NaN, 1.0f * s, 0.0f * s, -1.0f * s, -2.0f * s, Float.NaN, Float.NaN)
         }
     }
 
@@ -1709,9 +1707,9 @@ class DepthDiverGame : ApplicationAdapter() {
         val centerX = worldWidth / 2f
         val centerY = worldHeight / 2f
         val tall = worldHeight >= 540f
-        val r = pauseRows(tall)
-        val s = pauseSpacing()
-        val panelH = if (tall) 7.6f * s + lineHeight + 18f else 6.0f * s + 20f
+        val r = pauseRows(tall, lineHeight)
+        val s = pauseSpacing(lineHeight)
+        val panelH = if (tall) 8.8f * s else 6.1f * s
 
         Widgets.panel(batch, uiPixel, centerX, centerY, worldWidth * 0.76f, panelH)
 
