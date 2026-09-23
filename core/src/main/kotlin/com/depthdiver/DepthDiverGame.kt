@@ -43,7 +43,6 @@ object Strings {
         "back" to "BACK",
         "menu" to "MENU",
         "quit" to "QUIT",
-        "soon" to "coming soon",
         "pearls" to "PEARLS",
         "pearlsEarned" to "PEARLS EARNED",
         "dives" to "DIVES",
@@ -87,7 +86,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private val hazards = mutableListOf<Hazard>()
     private val pickups = mutableListOf<Pickup>()
-    private var state: GameState = GameState.PLAYING
+    private var state: GameState = GameState.MAIN_MENU
     private var hudPauseCx = 0f
     private var hudPauseCy = 0f
     private var hudPauseW = 0f
@@ -675,11 +674,14 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun handleSubScreenTouch(tx: Float, ty: Float) {
-        val label = Strings.t("back")
-        if (Widgets.contains(tx, ty, worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, label), Widgets.pillH(font, label))) {
+        val pill = backPill()
+        if (Widgets.contains(tx, ty, pill.cx, pill.cy, pill.w, pill.h)) {
             goToMenu()
         }
     }
+
+    private fun backPill(): ShopRect =
+        ShopRect(worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, Strings.t("back")), Widgets.pillH(font, Strings.t("back")))
 
     private fun shopBuyLabel(u: Profile.Upgrade): String {
         val cost = Profile.upgradeCost(u)
@@ -710,8 +712,8 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun handleShopTouch(tx: Float, ty: Float) {
-        val back = Strings.t("back")
-        if (Widgets.contains(tx, ty, worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, back), Widgets.pillH(font, back))) {
+        val pill = backPill()
+        if (Widgets.contains(tx, ty, pill.cx, pill.cy, pill.w, pill.h)) {
             goToMenu()
             return
         }
@@ -870,8 +872,8 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun drawSubScreenHeader(title: String) {
         Widgets.text(batch, titleFont, title, worldWidth / 2f, worldHeight * 0.84f)
-        val back = Strings.t("back")
-        Widgets.pill(batch, font, uiPixel, worldWidth / 2f, worldHeight * 0.08f, back)
+        val pill = backPill()
+        Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, Strings.t("back"))
     }
 
     private fun drawProfileScreen() {
@@ -1097,6 +1099,7 @@ class DepthDiverGame : ApplicationAdapter() {
         depth = 0f
         score = 0
         startBestScore = bestScore
+        leaderboardMade = false
         applyUpgrades()
         elapsed = 0f
         hazardTimer = 1f

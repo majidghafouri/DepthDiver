@@ -53,8 +53,6 @@ object Widgets {
         font.draw(batch, layout, cx - layout.width / 2f, cy + layout.height / 2f)
     }
 
-    fun textW(font: BitmapFont, s: String): Float = GlyphLayout(font, s).width
-
     /** Left-aligned text; anchor is the baseline at (x, y). */
     fun textLeft(batch: SpriteBatch, font: BitmapFont, s: String, x: Float, y: Float) {
         font.draw(batch, s, x, y)
