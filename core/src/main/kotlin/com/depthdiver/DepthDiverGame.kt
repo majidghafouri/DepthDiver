@@ -66,7 +66,8 @@ object Strings {
         "reachedDepth" to "REACHED DEPTH",
         "pearlsGained" to "PEARLS GAINED",
         "milestone" to "MILESTONE",
-        "leviathan" to "LEVIATHAN AHEAD!"
+        "leviathan" to "LEVIATHAN AHEAD!",
+        "combo" to "COMBO"
     )
     private val locale = EN
 
@@ -134,6 +135,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private var pickupTimer = 2f
     private var combo = 1
     private var comboTimer = 0f
+    private var maxComboWindow = 5f
     private var shieldActive = false
     private var shieldCooldown = 0f
 
@@ -451,7 +453,9 @@ class DepthDiverGame : ApplicationAdapter() {
                     }
                     is Pickup.Pearl -> {
                         combo += 1
-                        comboTimer = 5f + upgradeComboLevel * 2f
+                        val window = 5f + upgradeComboLevel * 2f
+                        comboTimer = window
+                        maxComboWindow = window
                         val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5)).toInt()
                         score += pearlValue * combo
                         runPearls += pearlValue
@@ -467,6 +471,11 @@ class DepthDiverGame : ApplicationAdapter() {
         }
         if (oxygen <= 0f) {
             endGame()
+        }
+
+        if (comboTimer > 0f) {
+            comboTimer -= delta
+            if (comboTimer <= 0f) combo = 1
         }
 
         if (depth > bestDepth) {
@@ -1237,6 +1246,22 @@ class DepthDiverGame : ApplicationAdapter() {
             font.color = Color(1f, 0.35f, 0.3f, 1f)
             glyphLayout.setText(font, Strings.t("leviathan"))
             font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, y - lineHeight * 1.4f)
+            font.color = Color.WHITE
+        }
+
+        if (state == GameState.PLAYING && combo > 1) {
+            font.color = Color.GOLD
+            glyphLayout.setText(font, "${Strings.t("combo")} x$combo")
+            val comboY = y - lineHeight * 2.8f
+            font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, comboY)
+            val barW = 90f
+            val barH = 5f
+            val frac = (comboTimer / maxComboWindow).coerceIn(0f, 1f)
+            batch.setColor(0f, 0f, 0f, 0.6f)
+            batch.draw(uiPixel, worldWidth - 10f - barW, comboY - lineHeight * 0.4f - barH, barW, barH)
+            batch.setColor(1f, 0.85f, 0.2f, 1f)
+            batch.draw(uiPixel, worldWidth - 10f - barW, comboY - lineHeight * 0.4f - barH, barW * frac, barH)
+            batch.setColor(1f, 1f, 1f, 1f)
             font.color = Color.WHITE
         }
 
