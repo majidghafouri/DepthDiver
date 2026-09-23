@@ -46,6 +46,16 @@ object Profile {
         prefs.flush()
     }
 
+    // ---------- settings ----------
+
+    /** 0 = EASY, 1 = NORMAL, 2 = HARD. */
+    fun difficulty(): Int = prefs.getInteger("difficulty", 1)
+
+    fun setDifficulty(index: Int) {
+        prefs.putInteger("difficulty", index)
+        prefs.flush()
+    }
+
     // ---------- upgrades ----------
 
     fun level(u: Upgrade): Int = prefs.getInteger(u.key, 0)

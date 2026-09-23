@@ -52,7 +52,11 @@ object Strings {
         "noRuns" to "NO RUNS YET",
         "level" to "LVL",
         "buy" to "BUY",
-        "max" to "MAX"
+        "max" to "MAX",
+        "difficulty" to "DIFF",
+        "easy" to "EASY",
+        "normal" to "NORMAL",
+        "hard" to "HARD"
     )
     private val locale = EN
 
@@ -325,7 +329,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun update(delta: Float) {
         if (state != GameState.PLAYING) return
         elapsed += delta
-        oxygen -= delta * 0.02f
+        val diff = currentDifficulty()
+        oxygen -= delta * diff.drain
         depth = max(depth, (worldHeight - max(playerY, playerRadius)) / pixelsPerMeter)
 
         if (shakeTimer > 0f) {
@@ -354,18 +359,18 @@ class DepthDiverGame : ApplicationAdapter() {
             }
         }
 
-        val difficulty = (depth / 40f).coerceAtLeast(0f)
-        val scrollSpeed = 90f + difficulty * 40f
+        val depthFactor = (depth / 40f).coerceAtLeast(0f)
+        val scrollSpeed = diff.baseScroll + depthFactor * (40f * diff.ramp)
 
         hazardTimer -= delta
         if (hazardTimer <= 0) {
             spawnHazard()
-            hazardTimer = MathUtils.random(1.4f, 2.6f) / (1f + difficulty * 0.6f)
+            hazardTimer = MathUtils.random(1.4f, 2.6f) * diff.spawnMul / (1f + depthFactor * 0.6f)
         }
         pickupTimer -= delta
         if (pickupTimer <= 0) {
             spawnPickup()
-            pickupTimer = MathUtils.random(3f, 5.5f)
+            pickupTimer = MathUtils.random(3f, 5.5f) * diff.pickupMul
         }
 
         updateEntities(delta, scrollSpeed)
@@ -653,7 +658,25 @@ class DepthDiverGame : ApplicationAdapter() {
         Strings.t("quit")
     )
 
+    private fun currentDifficulty(): Difficulty =
+        Difficulty.values()[Profile.difficulty().coerceIn(0, Difficulty.values().size - 1)]
+
+    private fun difficultyLabel(): String =
+        "${Strings.t("difficulty")}: ${Strings.t(currentDifficulty().name.lowercase())}"
+
+    private fun difficultyPillPos(): Pair<Float, Float> {
+        val cx = minOf(worldWidth * 0.88f, worldWidth - Widgets.pillW(font, difficultyLabel()) / 2f - 12f)
+        return cx to worldHeight * 0.045f
+    }
+
     private fun handleMenuTouch(tx: Float, ty: Float) {
+        val dLabel = difficultyLabel()
+        val (dcx, dcy) = difficultyPillPos()
+        if (Widgets.contains(tx, ty, dcx, dcy, Widgets.pillW(font, dLabel), Widgets.pillH(font, dLabel))) {
+            Profile.setDifficulty((Profile.difficulty() + 1) % Difficulty.values().size)
+            audio.playClick()
+            return
+        }
         val labels = menuLabels()
         for (i in labels.indices) {
             val (cx, cy) = Widgets.stack(worldWidth, worldHeight, i, labels.size)
@@ -875,8 +898,10 @@ class DepthDiverGame : ApplicationAdapter() {
             val (cx, cy) = Widgets.stack(worldWidth, worldHeight, i, labels.size)
             Widgets.pill(batch, font, uiPixel, cx, cy, labels[i])
         }
+        val (dcx, dcy) = difficultyPillPos()
+        Widgets.pill(batch, font, uiPixel, dcx, dcy, difficultyLabel())
         font.color = Color.CYAN
-        Widgets.text(batch, font, "P/Esc ${Strings.t("pause").lowercase()} · M ${Strings.t("muteOff").lowercase()}", worldWidth / 2f, worldHeight * 0.05f)
+        Widgets.text(batch, font, "P/Esc ${Strings.t("pause").lowercase()} · M ${Strings.t("muteOff").lowercase()}", worldWidth / 2f, worldHeight * 0.035f)
         font.color = Color.WHITE
     }
 
@@ -1030,6 +1055,11 @@ class DepthDiverGame : ApplicationAdapter() {
         glyphLayout.setText(font, oxygenStr)
         font.draw(batch, glyphLayout, 10f, y)
 
+        font.color = Color.CYAN
+        glyphLayout.setText(font, difficultyLabel())
+        font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, y)
+        font.color = Color.WHITE
+
         var pauseW = pausePillW
         var pauseH = 30f
         if (state == GameState.PLAYING) {
@@ -1145,4 +1175,10 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private enum class GameState { MAIN_MENU, PLAYING, PAUSED, GAME_OVER, PROFILE, LEADERBOARD, SHOP }
+
+private enum class Difficulty(val drain: Float, val baseScroll: Float, val ramp: Float, val spawnMul: Float, val pickupMul: Float) {
+    EASY(0.014f, 78f, 0.8f, 1.3f, 1.2f),
+    NORMAL(0.02f, 90f, 1f, 1f, 1f),
+    HARD(0.028f, 110f, 1.25f, 0.75f, 0.85f)
+}
 }
