@@ -34,9 +34,11 @@ object Leaderboard : LeaderboardService {
 
     fun instance(): LeaderboardService = this
 
-    private val prefs: Preferences by lazy {
-        Gdx.app.getPreferences("depthdiver-leaderboard")
-    }
+    /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
+    internal var prefsOverride: Preferences? = null
+
+    private val prefs: Preferences
+        get() = prefsOverride ?: Gdx.app.getPreferences("depthdiver-leaderboard")
 
     override fun top(): List<LeaderboardEntry> {
         val entries = ArrayList<LeaderboardEntry>(MAX_ENTRIES)

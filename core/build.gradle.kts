@@ -8,9 +8,14 @@ java {
     }
 }
 
+tasks.test {
+    useJUnit()
+}
+
 dependencies {
     implementation(libs.gdx)
     implementation(libs.gdx.freetype)
     implementation(libs.gdx.freetype.platform)
-    testImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 }

@@ -9,7 +9,11 @@ import com.badlogic.gdx.Preferences
  */
 object Profile {
 
-    private val prefs: Preferences by lazy { Gdx.app.getPreferences("depthdiver") }
+    private val prefs: Preferences
+        get() = prefsOverride ?: Gdx.app.getPreferences("depthdiver")
+
+    /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
+    internal var prefsOverride: Preferences? = null
 
     const val MAX_LEVEL = 5
 

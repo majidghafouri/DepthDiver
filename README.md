@@ -159,6 +159,10 @@ adb shell am start -n app.depthdiver/app.deepdepthdiver.AndroidLauncher
   `baseCost × level`.
 - **Entities:** `sealed class Pickup`/`Hazard` hierarchies in
   `core/.../entity/`, driven each frame from `DepthDiverGame.render()`.
+- **Tests:** headless JVM unit tests for the persistence logic (leaderboard
+  ranking, upgrade cost math, daily bonus, achievements gating) run with
+  `./gradlew :core:test` — they inject `TestPreferences`, an in-memory
+  `Preferences` so `Gdx` isn't required.
 - **Config cache:** the project is configuration-cache compatible.
 
 ---

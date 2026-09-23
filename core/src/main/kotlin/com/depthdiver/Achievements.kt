@@ -8,7 +8,11 @@ object Achievements {
 
     data class Def(val id: String, val name: String, val check: () -> Boolean)
 
-    private val prefs: Preferences by lazy { Gdx.app.getPreferences("depthdiver-achievements") }
+    private val prefs: Preferences
+        get() = prefsOverride ?: Gdx.app.getPreferences("depthdiver-achievements")
+
+    /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
+    internal var prefsOverride: Preferences? = null
 
     val ALL: List<Def> = listOf(
         Def("depth50", "REACHED 50 M", { Profile.bestDepth() >= 50f }),

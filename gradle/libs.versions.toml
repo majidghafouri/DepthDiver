@@ -3,6 +3,7 @@ agp = "9.4.1"
 kotlin = "2.2.20"
 material = "1.10.0"
 gdx = "1.14.2"
+junit = "4.13.2"
 
 [libraries]
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
@@ -11,6 +12,7 @@ gdx-backend-lwjgl3 = { group = "com.badlogicgames.gdx", name = "gdx-backend-lwjg
 gdx-backend-android = { group = "com.badlogicgames.gdx", name = "gdx-backend-android", version.ref = "gdx" }
 gdx-freetype = { group = "com.badlogicgames.gdx", name = "gdx-freetype", version.ref = "gdx" }
 gdx-freetype-platform = { group = "com.badlogicgames.gdx", name = "gdx-freetype-platform", version.ref = "gdx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
