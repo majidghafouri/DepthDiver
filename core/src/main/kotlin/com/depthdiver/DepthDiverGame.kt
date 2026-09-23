@@ -57,7 +57,10 @@ object Strings {
         "easy" to "EASY",
         "normal" to "NORMAL",
         "hard" to "HARD",
-        "achievements" to "ACHIEVEMENTS"
+        "achievements" to "ACHIEVEMENTS",
+        "open" to "OPEN",
+        "locked" to "LOCKED",
+        "allDone" to "ALL ACHIEVEMENTS UNLOCKED"
     )
     private val locale = EN
 
@@ -555,16 +558,16 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
             }
 
-            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP -> {
+            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP, GameState.ACHIEVEMENTS -> {
                 if (escJust || pJust) {
                     goToMenu()
                     return
                 }
                 if (Gdx.input.justTouched()) {
-                    if (state == GameState.SHOP) {
-                        handleShopTouch(touchX(), touchY())
-                    } else {
-                        handleSubScreenTouch(touchX(), touchY())
+                    when (state) {
+                        GameState.SHOP -> handleShopTouch(touchX(), touchY())
+                        GameState.PROFILE -> handleProfileTouch(touchX(), touchY())
+                        else -> handleSubScreenTouch(touchX(), touchY())
                     }
                 }
             }
@@ -721,6 +724,19 @@ class DepthDiverGame : ApplicationAdapter() {
         }
     }
 
+    private fun handleProfileTouch(tx: Float, ty: Float) {
+        val backPill = arrayOf(worldWidth * 0.2f, worldHeight * 0.08f)
+        if (Widgets.contains(tx, ty, backPill[0], backPill[1], Widgets.pillW(font, Strings.t("back")), Widgets.pillH(font, Strings.t("back")))) {
+            goToMenu()
+            return
+        }
+        val achLabel = "${Strings.t("achievements")} ${Achievements.count()}/${Achievements.ALL.size}"
+        if (Widgets.contains(tx, ty, worldWidth * 0.8f, worldHeight * 0.08f, Widgets.pillW(font, achLabel), Widgets.pillH(font, achLabel))) {
+            state = GameState.ACHIEVEMENTS
+            audio.playClick()
+        }
+    }
+
     private fun backPill(): ShopRect =
         ShopRect(worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, Strings.t("back")), Widgets.pillH(font, Strings.t("back")))
 
@@ -839,6 +855,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 GameState.PROFILE -> drawProfileScreen()
                 GameState.LEADERBOARD -> drawLeaderboardScreen()
                 GameState.SHOP -> drawShopScreen()
+                GameState.ACHIEVEMENTS -> drawAchievementsScreen()
                 GameState.PLAYING, GameState.PAUSED, GameState.GAME_OVER -> {}
             }
         }
@@ -947,7 +964,10 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun drawProfileScreen() {
-        drawSubScreenHeader(Strings.t("profile"))
+        Widgets.text(batch, titleFont, Strings.t("profile"), worldWidth / 2f, worldHeight * 0.84f)
+        Widgets.pill(batch, font, uiPixel, worldWidth * 0.2f, worldHeight * 0.08f, Strings.t("back"))
+        val achLabel = "${Strings.t("achievements")} ${Achievements.count()}/${Achievements.ALL.size}"
+        Widgets.pill(batch, font, uiPixel, worldWidth * 0.8f, worldHeight * 0.08f, achLabel)
         val panelCx = worldWidth / 2f
         val panelCy = worldHeight / 2f
         val panelW = min(worldWidth * 0.8f, worldHeight * 1.2f).coerceAtMost(520f)
@@ -971,6 +991,38 @@ class DepthDiverGame : ApplicationAdapter() {
             Widgets.textLeft(batch, font, label, labelX, cy)
             font.color = Color.GOLD
             Widgets.textRight(batch, font, value, valueX, cy)
+        }
+        font.color = Color.WHITE
+    }
+
+    private fun drawAchievementsScreen() {
+        drawSubScreenHeader(Strings.t("achievements"))
+        val panelCx = worldWidth / 2f
+        val panelCy = worldHeight / 2f
+        val panelW = min(worldWidth * 0.8f, worldHeight * 1.2f).coerceAtMost(520f)
+        val panelH = worldHeight * 0.52f
+        Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
+
+        if (Achievements.count() == Achievements.ALL.size) {
+            font.color = Color.GOLD
+            Widgets.text(batch, font, Strings.t("allDone"), panelCx, panelCy + panelH / 2f - 22f)
+        }
+
+        val labelX = panelCx - panelW / 2f + 34f
+        val statusX = panelCx + panelW / 2f - 34f
+        val lineGap = min(46f, panelH / (Achievements.ALL.size + 1))
+        Achievements.ALL.forEachIndexed { i, def ->
+            val cy = panelCy + panelH / 2f - lineGap * (i + 1)
+            if (Achievements.isUnlocked(def)) {
+                font.color = Color.GOLD
+                Widgets.textLeft(batch, font, def.name, labelX, cy)
+                font.color = Color.WHITE
+                Widgets.textRight(batch, font, Strings.t("open"), statusX, cy)
+            } else {
+                font.color = Color(0.45f, 0.55f, 0.65f, 1f)
+                Widgets.textLeft(batch, font, def.name, labelX, cy)
+                Widgets.textRight(batch, font, Strings.t("locked"), statusX, cy)
+            }
         }
         font.color = Color.WHITE
     }
@@ -1202,7 +1254,7 @@ class DepthDiverGame : ApplicationAdapter() {
         state = GameState.PLAYING
     }
 
-    private enum class GameState { MAIN_MENU, PLAYING, PAUSED, GAME_OVER, PROFILE, LEADERBOARD, SHOP }
+    private enum class GameState { MAIN_MENU, PLAYING, PAUSED, GAME_OVER, PROFILE, LEADERBOARD, SHOP, ACHIEVEMENTS }
 
 private enum class Difficulty(val drain: Float, val baseScroll: Float, val ramp: Float, val spawnMul: Float, val pickupMul: Float) {
     EASY(0.014f, 78f, 0.8f, 1.3f, 1.2f),
