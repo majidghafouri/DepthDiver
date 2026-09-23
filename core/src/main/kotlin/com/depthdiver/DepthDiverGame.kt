@@ -925,22 +925,33 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private class ShopRect(val cx: Float, val cy: Float, val w: Float, val h: Float)
 
+    /** Shared panel width for the sub-screens (profile/achievements/leaderboard/shop):
+     *  wide enough that long stat/achievement names never collide with their values. */
+    private fun subPanelW(): Float = min(worldWidth * 0.86f, worldHeight * 1.6f).coerceAtMost(700f)
+
     private fun shopPanel(): ShopRect {
-        val panelW = min(worldWidth * 0.82f, worldHeight * 1.35f).coerceAtMost(560f)
-        val panelH = worldHeight * 0.58f
+        val panelW = subPanelW()
+        val panelH = worldHeight * 0.6f
         return ShopRect(worldWidth / 2f, worldHeight / 2f, panelW, panelH)
     }
 
+    private fun shopHeaderCy(panel: ShopRect): Float =
+        panel.cy + panel.h / 2f - 34f
+
     private fun shopRowCy(index: Int, panel: ShopRect): Float {
-        val lineGap = min(52f, panel.h / (Profile.Upgrade.values().size + 1))
-        return panel.cy + panel.h / 2f - 50f - lineGap * index
+        val lineGap = min(60f, (panel.h - 84f) / Profile.Upgrade.values().size)
+        return panel.cy + panel.h / 2f - 84f - lineGap * index
     }
+
+    /** Fixed left edge for every BUY pill so the buttons form one clean column. */
+    private fun shopPillLeft(panel: ShopRect): Float = panel.cx + panel.w / 2f - 150f
 
     private fun shopBuyPill(u: Profile.Upgrade, panel: ShopRect, index: Int): ShopRect {
         val label = shopBuyLabel(u)
+        val leftX = shopPillLeft(panel)
         return ShopRect(
-            panel.cx + panel.w / 2f - 82f,
-            shopRowCy(index, panel),
+            leftX + Widgets.pillW(font, label) / 2f,
+            shopRowCy(index, panel) - 13f,
             Widgets.pillW(font, label),
             Widgets.pillH(font, label)
         )
@@ -1402,7 +1413,7 @@ class DepthDiverGame : ApplicationAdapter() {
         Widgets.pill(batch, font, uiPixel, worldWidth * 0.8f, worldHeight * 0.08f, achLabel)
         val panelCx = worldWidth / 2f
         val panelCy = worldHeight / 2f
-        val panelW = min(worldWidth * 0.8f, worldHeight * 1.2f).coerceAtMost(520f)
+        val panelW = subPanelW()
         val panelH = worldHeight * 0.58f
         Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
 
@@ -1425,13 +1436,14 @@ class DepthDiverGame : ApplicationAdapter() {
             Widgets.textRight(batch, font, value, valueX, cy)
         }
         font.color = Color.WHITE
+        val panelBottom = panelCy - panelH / 2f
         font.color = Color.GOLD
         Widgets.text(
             batch,
             font,
             if (Profile.claimedDailyDay() == Profile.dailyDay()) Strings.t("dailyClaimed") else Strings.t("dailyReady"),
             panelCx,
-            panelCy - panelH / 2f - 22f
+            panelBottom - 30f
         )
         val activeCh = Challenge.activeFor(Profile.dailyDay())
         val chText = if (Challenge.claimedFor(activeCh)) {
@@ -1440,7 +1452,7 @@ class DepthDiverGame : ApplicationAdapter() {
             activeCh.summary(bestDepth, Profile.lifetimePearls(), bestScore)
         }
         font.color = Color.CYAN
-        Widgets.text(batch, font, chText, panelCx, panelCy - panelH / 2f - 22f - 24f)
+        Widgets.text(batch, font, chText, panelCx, panelBottom - 30f - 48f)
         font.color = Color.WHITE
     }
 
@@ -1448,7 +1460,7 @@ class DepthDiverGame : ApplicationAdapter() {
         drawSubScreenHeader(Strings.t("achievements"))
         val panelCx = worldWidth / 2f
         val panelCy = worldHeight / 2f
-        val panelW = min(worldWidth * 0.8f, worldHeight * 1.2f).coerceAtMost(520f)
+        val panelW = subPanelW()
         val panelH = worldHeight * 0.52f
         Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
 
@@ -1480,7 +1492,7 @@ class DepthDiverGame : ApplicationAdapter() {
         drawSubScreenHeader(Strings.t("leaderboard"))
         val panelCx = worldWidth / 2f
         val panelCy = worldHeight / 2f
-        val panelW = min(worldWidth * 0.8f, worldHeight * 1.2f).coerceAtMost(520f)
+        val panelW = subPanelW()
         val panelH = worldHeight * 0.56f
         Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
 
@@ -1515,19 +1527,19 @@ class DepthDiverGame : ApplicationAdapter() {
         Widgets.panel(batch, uiPixel, panel.cx, panel.cy, panel.w, panel.h)
 
         font.color = Color.GOLD
-        Widgets.textRight(batch, font, "${Strings.t("pearls")}: ${Profile.pearls()}", panel.cx + panel.w / 2f - 30f, panel.cy + panel.h / 2f - 12f)
+        Widgets.text(batch, font, "${Strings.t("pearls")}: ${Profile.pearls()}", panel.cx, shopHeaderCy(panel))
 
         Profile.Upgrade.values().forEachIndexed { i, u ->
             val cy = shopRowCy(i, panel)
-            val lvl = Profile.level(u)
             val pill = shopBuyPill(u, panel, i)
+            val lvl = Profile.level(u)
             val label = shopBuyLabel(u)
             val affordable = !Profile.isMaxed(u) && Profile.pearls() >= (Profile.upgradeCost(u) ?: 0)
 
             font.color = Color.WHITE
-            Widgets.textLeft(batch, font, u.label, panel.cx - panel.w / 2f + 30f, cy)
+            Widgets.textLeft(batch, font, u.label, panel.cx - panel.w / 2f + 34f, cy)
             font.color = Color.CYAN
-            Widgets.textRight(batch, font, "${Strings.t("level")} $lvl/${Profile.MAX_LEVEL}", pill.cx - pill.w / 2f - 14f, cy)
+            Widgets.textRight(batch, font, "${Strings.t("level")} $lvl/${Profile.MAX_LEVEL}", shopPillLeft(panel) - 24f, cy)
             Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, label, enabled = affordable)
         }
         font.color = Color.WHITE
