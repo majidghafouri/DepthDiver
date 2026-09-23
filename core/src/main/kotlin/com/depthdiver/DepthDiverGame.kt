@@ -60,7 +60,8 @@ object Strings {
         "achievements" to "ACHIEVEMENTS",
         "open" to "OPEN",
         "locked" to "LOCKED",
-        "allDone" to "ALL ACHIEVEMENTS UNLOCKED"
+        "allDone" to "ALL ACHIEVEMENTS UNLOCKED",
+        "bossCleared" to "LEVIATHAN CLEARED"
     )
     private val locale = EN
 
@@ -88,6 +89,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var rockTex: Texture
     private lateinit var mineTex: Texture
     private lateinit var jellyfishTex: Texture
+    private lateinit var sharkTex: Texture
+    private lateinit var eelTex: Texture
     private lateinit var pearlTex: Texture
     private lateinit var oxyTex: Texture
     private lateinit var uiPixel: Texture
@@ -245,11 +248,33 @@ class DepthDiverGame : ApplicationAdapter() {
 
         val sharkPix = Pixmap(96, 32, Pixmap.Format.RGBA8888)
         sharkPix.setColor(0.55f, 0.62f, 0.72f, 1f)
-        sharkPix.fillTriangle(8, 16, 88, 16, 52, 30)
+        sharkPix.fillCircle(52, 16, 14)
+        sharkPix.fillTriangle(38, 16, 18, 6, 18, 26)
+        sharkPix.fillTriangle(66, 16, 46, 4, 46, 28)
         sharkPix.setColor(0.85f, 0.9f, 0.95f, 1f)
-        sharkPix.fillTriangle(58, 17, 84, 17, 62, 26)
-        sharkPix.setColor(0.15f, 0.18f, 0.22f, 1f)
-        sharkPix.fillCircle(22, 120, 3)
+        sharkPix.fillCircle(56, 21, 7)
+        sharkPix.setColor(0.55f, 0.62f, 0.72f, 1f)
+        sharkPix.fillTriangle(46, 8, 56, 2, 60, 10)
+        sharkPix.setColor(0.1f, 0.1f, 0.14f, 1f)
+        sharkPix.fillCircle(62, 12, 2)
+        sharkTex = Texture(sharkPix)
+        sharkPix.dispose()
+
+        val eelPix = Pixmap(96, 32, Pixmap.Format.RGBA8888)
+        eelPix.setColor(0.16f, 0.5f, 0.34f, 1f)
+        eelPix.fillCircle(30, 16, 10)
+        eelPix.fillCircle(48, 16, 9)
+        eelPix.fillCircle(66, 16, 8)
+        eelPix.fillCircle(82, 16, 7)
+        eelPix.fillTriangle(24, 16, 10, 7, 10, 25)
+        eelPix.setColor(0.35f, 0.75f, 0.5f, 1f)
+        eelPix.fillRectangle(22, 21, 52, 4)
+        eelPix.setColor(0.95f, 0.9f, 0.3f, 1f)
+        eelPix.fillCircle(87, 13, 2)
+        eelPix.setColor(0.06f, 0.2f, 0.15f, 1f)
+        eelPix.fillCircle(87, 9, 2)
+        eelTex = Texture(eelPix)
+        eelPix.dispose()
 
         reset()
         state = GameState.MAIN_MENU
@@ -331,6 +356,8 @@ class DepthDiverGame : ApplicationAdapter() {
         rockTex.dispose()
         mineTex.dispose()
         jellyfishTex.dispose()
+        sharkTex.dispose()
+        eelTex.dispose()
         pearlTex.dispose()
         oxyTex.dispose()
         audio.dispose()
@@ -474,11 +501,18 @@ class DepthDiverGame : ApplicationAdapter() {
                     hazard.rect.y -= scrollSpeed * (if (hazard.isBoss) 0.15f else 0.5f) * delta
                     hazard.rect.x += MathUtils.sin(elapsed * 0.8f + hazard.phase) * 14f * delta
                 }
+                is Hazard.Eel -> {
+                    hazard.rect.x += 150f * hazard.dir * delta
+                    hazard.rect.y = hazard.baseY - scrollSpeed * (elapsed - hazard.spawn) * 0.35f + MathUtils.sin(elapsed * 2f + hazard.phase) * 8f
+                }
             }
             if (hazard.rect.y + hazard.rect.height < 0f ||
                 hazard.rect.x + hazard.rect.width < 0f ||
                 hazard.rect.x > worldWidth
             ) {
+                if (hazard is Hazard.Shark && hazard.isBoss && hazard.rect.y + hazard.rect.height < 0f) {
+                    onBossEscaped()
+                }
                 itr.remove()
             }
         }
@@ -501,7 +535,21 @@ class DepthDiverGame : ApplicationAdapter() {
                 hazards.add(Hazard.Rock(Rectangle(-24f, worldHeight + 40f, 96f, 120f), 0f))
                 hazards.add(Hazard.Rock(Rectangle(worldWidth - 72f, worldHeight + 40f, 96f, 120f), 0f))
             }
-            depth > 35f && roll < 0.55f -> {
+            depth > 45f && roll < 0.45f -> {
+                val dir = if (MathUtils.random() < 0.5f) 1 else -1
+                val baseY = MathUtils.random(0.35f, 0.7f) * worldHeight
+                val startX = if (dir == 1) -170f else worldWidth + 10f
+                hazards.add(
+                    Hazard.Eel(
+                        Rectangle(startX, baseY, 150f, 34f),
+                        dir,
+                        MathUtils.random(0f, MathUtils.PI2),
+                        baseY,
+                        elapsed
+                    )
+                )
+            }
+            depth > 35f && roll < 0.65f -> {
                 hazards.add(
                     Hazard.Jellyfish(
                         Rectangle(x, worldHeight + 60f, 60f, 60f),
@@ -511,11 +559,11 @@ class DepthDiverGame : ApplicationAdapter() {
                     )
                 )
             }
-            depth > 18f && roll < 0.8f -> {
+            depth > 18f && roll < 0.85f -> {
                 hazards.add(Hazard.Mine(Rectangle(x, worldHeight + 48f, 48f, 48f), MathUtils.random(0f, MathUtils.PI2)))
             }
-            depth > 80f && roll < 0.95f -> {
-                val boss = depth > 120f && MathUtils.random() < 0.04f
+            depth > 80f && roll < 0.97f -> {
+                val boss = depth > 120f && MathUtils.random() < 0.06f
                 val w = if (boss) 130f else 84f
                 val h = if (boss) 46f else 30f
                 hazards.add(Hazard.Shark(Rectangle(x, worldHeight + 60f, w, h), 0f, boss))
@@ -525,6 +573,15 @@ class DepthDiverGame : ApplicationAdapter() {
                 hazards.add(Hazard.Rock(Rectangle(x, worldHeight + 80f, size, size), MathUtils.random(0f, MathUtils.PI2)))
             }
         }
+    }
+
+    private fun onBossEscaped() {
+        val bonus = 50
+        Profile.addPearls(bonus)
+        Profile.addLifetimePearls(bonus)
+        achievementToast = "${Strings.t("bossCleared")} +$bonus"
+        achievementToastTimer = 3f
+        audio.playAchieve()
     }
 
     private fun spawnPickup() {
@@ -882,13 +939,21 @@ class DepthDiverGame : ApplicationAdapter() {
         }
         batch.setColor(1f, 1f, 1f, 1f)
         for (hazard in hazards) {
-            val tex = when (hazard) {
-                is Hazard.Rock -> rockTex
-                is Hazard.Mine -> mineTex
-                is Hazard.Jellyfish -> jellyfishTex
-                is Hazard.Shark -> rockTex
+            val isBoss = hazard is Hazard.Shark && hazard.isBoss
+            if (isBoss) batch.setColor(1f, 0.45f, 0.4f, 1f)
+            when (hazard) {
+                is Hazard.Rock -> batch.draw(rockTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                is Hazard.Mine -> batch.draw(mineTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                is Hazard.Jellyfish -> batch.draw(jellyfishTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                is Hazard.Shark -> batch.draw(sharkTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                is Hazard.Eel ->
+                    if (hazard.dir > 0) {
+                        batch.draw(eelTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                    } else {
+                        batch.draw(eelTex, hazard.rect.x + hazard.rect.width, hazard.rect.y, -hazard.rect.width, hazard.rect.height)
+                    }
             }
-            batch.draw(tex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+            batch.setColor(1f, 1f, 1f, 1f)
         }
         for (pickup in pickups) {
             if (pickup.collected) continue

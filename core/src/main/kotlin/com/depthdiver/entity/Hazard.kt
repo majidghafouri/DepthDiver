@@ -18,4 +18,13 @@ sealed class Hazard {
         val phase: Float,
         val isBoss: Boolean = false
     ) : Hazard()
+
+    /** Sweeps horizontally across the screen at a fixed depth band. */
+    class Eel(
+        override val rect: Rectangle,
+        val dir: Int,
+        val phase: Float,
+        val baseY: Float,
+        val spawn: Float
+    ) : Hazard()
 }
