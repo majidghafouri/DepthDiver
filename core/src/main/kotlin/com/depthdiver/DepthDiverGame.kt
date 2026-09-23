@@ -12,6 +12,7 @@ import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator
+import com.badlogic.gdx.graphics.glutils.FrameBuffer
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
@@ -168,6 +169,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private val pixelsPerMeter = 20f
     private var worldWidth = 800f
     private var worldHeight = 600f
+    private var menuFbo: FrameBuffer? = null
 
     override fun create() {
         batch = SpriteBatch()
@@ -397,7 +399,21 @@ class DepthDiverGame : ApplicationAdapter() {
         fishTex.dispose()
         pearlTex.dispose()
         oxyTex.dispose()
+        menuFbo?.dispose()
+        menuFbo = null
         audio.dispose()
+    }
+
+    /** One low-res render target used to fake a soft blur behind menu content. */
+    private fun ensureMenuFbo() {
+        val wantW = (worldWidth / 4).toInt().coerceAtLeast(1)
+        val wantH = (worldHeight / 4).toInt().coerceAtLeast(1)
+        val cur = menuFbo
+        if (cur != null && cur.width == wantW && cur.height == wantH) return
+        cur?.dispose()
+        menuFbo = FrameBuffer(Pixmap.Format.RGBA8888, wantW, wantH, false).apply {
+            colorBufferTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear)
+        }
     }
 
     private fun update(delta: Float) {
@@ -1212,9 +1228,36 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun drawMainMenu() {
+        drawMenuBackgroundBlur()
+        drawMenuContent()
+    }
+
+    /** Renders the animated menu background into a 1/4-res FBO, then composites it
+     *  back upscaled with bilinear filtering (with a dim tint) to fake a soft blur
+     *  behind the crisp menu content. */
+    private fun drawMenuBackgroundBlur() {
+        ensureMenuFbo()
+        val fbo = menuFbo ?: return
+        batch.end()
+        fbo.begin()
+        Gdx.gl.glClearColor(0.02f, 0.12f, 0.25f, 1f)
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
+        batch.projectionMatrix = camera.combined
+        batch.begin()
         drawMenuBackground()
         drawMenuVignette()
+        batch.end()
+        fbo.end()
+        batch.projectionMatrix = camera.combined
+        batch.begin()
+        batch.setColor(1f, 1f, 1f, 0.92f)
+        batch.draw(fbo.colorBufferTexture, 0f, 0f, worldWidth, worldHeight)
+        batch.setColor(0f, 0.03f, 0.10f, 0.22f)
+        batch.draw(uiPixel, 0f, 0f, worldWidth, worldHeight)
+        batch.setColor(Color.WHITE)
+    }
 
+    private fun drawMenuContent() {
         val pulse = 0.5f + 0.5f * MathUtils.sin(menuTime * 1.8f)
         val titleY = worldHeight * 0.86f
         titleFont.color = Color(0.12f, 0.5f, 0.95f, 0.22f + 0.15f * pulse)
@@ -1465,11 +1508,7 @@ class DepthDiverGame : ApplicationAdapter() {
         val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore"
         glyphLayout.setText(font, bestStr)
         val bestW = glyphLayout.width
-        val pausePillRight = worldWidth - 12f
-        val pausePillW = 64f
         var bestX = worldWidth - bestW - 12f
-        val bestLimit = pausePillRight - pausePillW - 16f
-        if (bestX > bestLimit - bestW) bestX = bestLimit - bestW
         if (bestX < scoreX + 16f) bestX = scoreX + 16f
         glyphLayout.setText(font, bestStr)
         font.draw(batch, glyphLayout, bestX, y)
@@ -1507,17 +1546,24 @@ class DepthDiverGame : ApplicationAdapter() {
             font.color = Color.WHITE
         }
 
-        var pauseW = pausePillW
-        var pauseH = 30f
         if (state == GameState.PLAYING) {
-            val (w, h) = Widgets.pill(batch, font, uiPixel, bestX + bestW / 2f, y - lineHeight / 2f, Strings.t("pause"))
-            pauseW = w
-            pauseH = h
+            val pl = Strings.t("pause")
+            val plW = Widgets.pillW(font, pl)
+            val plH = Widgets.pillH(font, pl)
+            val row3Y = y - lineHeight - lineSpacing
+            val plCX = worldWidth - 12f - plW / 2f
+            val plCY = row3Y - plH / 2f + lineHeight / 2f
+            val (w, h) = Widgets.pill(batch, font, uiPixel, plCX, plCY, pl)
+            hudPauseW = w
+            hudPauseH = h
+            hudPauseCx = plCX
+            hudPauseCy = plCY
+        } else {
+            hudPauseW = worldWidth * 0.1f
+            hudPauseH = worldHeight * 0.05f
+            hudPauseCx = worldWidth - 12f - hudPauseW / 2f
+            hudPauseCy = y - lineHeight * 1.5f - lineSpacing
         }
-        hudPauseCx = bestX + bestW / 2f
-        hudPauseCy = y - lineHeight / 2f
-        hudPauseW = pauseW
-        hudPauseH = pauseH
 
         if (state == GameState.PAUSED) {
             drawPauseOverlay(glyphLayout, lineHeight)
