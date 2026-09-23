@@ -46,7 +46,11 @@ object Strings {
         "soon" to "coming soon",
         "pearls" to "PEARLS",
         "pearlsEarned" to "PEARLS EARNED",
-        "dives" to "DIVES"
+        "dives" to "DIVES",
+        "newRecord" to "NEW RECORD!",
+        "top5" to "ENTERED TOP 5!",
+        "rank" to "RANK",
+        "noRuns" to "NO RUNS YET"
     )
     private val locale = EN
 
@@ -91,6 +95,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var prefs: Preferences
     private var bestDepth = 0f
     private var bestScore = 0
+    private var leaderboardMade = false
+    private var startBestScore = 0
 
     private var upgradeOxygenLevel = 0
     private var upgradeSpeedLevel = 0
@@ -819,8 +825,35 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun drawLeaderboardScreen() {
         drawSubScreenHeader(Strings.t("leaderboard"))
-        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight / 2f, worldWidth * 0.72f, worldHeight * 0.5f)
-        Widgets.text(batch, font, "${Strings.t("soon")}", worldWidth / 2f, worldHeight / 2f - 40f)
+        val panelCx = worldWidth / 2f
+        val panelCy = worldHeight / 2f
+        val panelW = min(worldWidth * 0.8f, worldHeight * 1.2f).coerceAtMost(520f)
+        val panelH = worldHeight * 0.56f
+        Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
+
+        val entries = Leaderboard.top()
+
+        font.color = Color.CYAN
+        Widgets.textLeft(batch, font, Strings.t("rank"), panelCx - panelW / 2f + 40f, panelCy + panelH / 2f - 26f)
+        val scoreX = panelCx + panelW / 4f
+        val depthX = panelCx + panelW / 2f - 40f
+        Widgets.textRight(batch, font, Strings.t("score"), scoreX, panelCy + panelH / 2f - 26f)
+        Widgets.textRight(batch, font, Strings.t("depth"), depthX, panelCy + panelH / 2f - 26f)
+
+        if (entries.isEmpty()) {
+            font.color = Color.WHITE
+            Widgets.text(batch, font, Strings.t("noRuns"), panelCx, panelCy - 10f)
+        } else {
+            val lineGap = min(38f, panelH / (entries.size + 1))
+            entries.forEachIndexed { i, e ->
+                val cy = panelCy + panelH / 2f - 56f - lineGap * i
+                font.color = Color.WHITE
+                Widgets.textLeft(batch, font, "${i + 1}.", panelCx - panelW / 2f + 40f, cy)
+                Widgets.textRight(batch, font, "${e.score}", scoreX, cy)
+                Widgets.textRight(batch, font, "${e.depth.toInt()} m", depthX, cy)
+            }
+        }
+        font.color = Color.WHITE
     }
 
     private fun drawShopScreen() {
@@ -896,6 +929,17 @@ class DepthDiverGame : ApplicationAdapter() {
             val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
             glyphLayout.setText(font, bestStr)
             font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f)
+
+            if (leaderboardMade) {
+                font.color = Color.GOLD
+                glyphLayout.setText(font, Strings.t("top5"))
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f - lineHeight * 1.6f)
+            }
+            if (score > startBestScore) {
+                font.color = Color.GOLD
+                glyphLayout.setText(font, Strings.t("newRecord"))
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + glyphLayout.height / 2f + 16f + lineHeight * 1.6f)
+            }
             font.color = Color.WHITE
         }
     }
@@ -933,6 +977,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun endGame() {
         if (state == GameState.PLAYING) {
             state = GameState.GAME_OVER
+            leaderboardMade = Leaderboard.qualifies(score, depth)
+            Leaderboard.submit(score, depth)
             Profile.recordDive()
             audio.playCrash()
         }
@@ -949,6 +995,7 @@ class DepthDiverGame : ApplicationAdapter() {
         playerY = worldHeight * 0.25f
         depth = 0f
         score = 0
+        startBestScore = bestScore
         applyUpgrades()
         elapsed = 0f
         hazardTimer = 1f
