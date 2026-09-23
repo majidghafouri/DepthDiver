@@ -685,7 +685,6 @@ class DepthDiverGame : ApplicationAdapter() {
             font.color = Color.WHITE
         }
         batch.end()
-        batch.end()
     }
 
     private fun playerRect() =
