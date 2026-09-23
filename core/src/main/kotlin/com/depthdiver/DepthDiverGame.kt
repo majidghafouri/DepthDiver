@@ -125,6 +125,8 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private val particles = mutableListOf<Particle>()
 
+    private var menuTime = 0f
+
     private var playerSpeed = 320f
     private val playerRadius = 18f
     private val pixelsPerMeter = 20f
@@ -250,6 +252,7 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     override fun render() {
+        menuTime += Gdx.graphics.deltaTime
         handleInput()
         update(Gdx.graphics.deltaTime)
         draw()
@@ -750,6 +753,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun goToMenu() {
         prefs.putBoolean("runSaved", false)
         prefs.flush()
+        menuTime = 0f
         state = GameState.MAIN_MENU
     }
 
@@ -854,7 +858,13 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun drawMainMenu() {
+        drawMenuBackground()
+
+        val pulse = 0.5f + 0.5f * MathUtils.sin(menuTime * 1.8f)
+        titleFont.color = Color(0.4f + 0.5f * pulse, 0.87f, 1f, 1f)
         Widgets.text(batch, titleFont, Strings.t("menuTitle"), worldWidth / 2f, worldHeight * 0.86f)
+        titleFont.color = Color(0.35f, 0.85f, 1f, 1f)
+
         if (worldHeight >= 520f) {
             font.color = Color.CYAN
             Widgets.text(batch, font, Strings.t("menuSubtitle"), worldWidth / 2f, worldHeight * 0.74f)
@@ -868,6 +878,26 @@ class DepthDiverGame : ApplicationAdapter() {
         font.color = Color.CYAN
         Widgets.text(batch, font, "P/Esc ${Strings.t("pause").lowercase()} · M ${Strings.t("muteOff").lowercase()}", worldWidth / 2f, worldHeight * 0.05f)
         font.color = Color.WHITE
+    }
+
+    private fun drawMenuBackground() {
+        val bubbleCount = 26
+        for (i in 0 until bubbleCount) {
+            val xFrac = (i * 37 % 100) / 100f
+            val x = xFrac * worldWidth
+            val speed = 20f + (i % 5) * 9f
+            val size = 4f + (i % 4) * 3f
+            val start = (i * 53 % 100) / 100f * (worldHeight + 80f)
+            val y = (start + menuTime * speed) % (worldHeight + 80f) - 40f
+            val alpha = 0.10f + (i % 3) * 0.05f
+            batch.setColor(0.55f, 0.85f, 1f, alpha)
+            batch.draw(uiPixel, x - size / 2f, y - size / 2f, size, size)
+        }
+        val dSize = playerRadius * 2f * 1.8f
+        val dx = worldWidth * 0.5f + MathUtils.sin(menuTime * 0.5f) * worldWidth * 0.16f
+        val dy = worldHeight * 0.585f + MathUtils.sin(menuTime * 1.1f) * 12f
+        batch.draw(playerTex, dx - dSize / 2f, dy - dSize / 2f, dSize, dSize)
+        batch.setColor(1f, 1f, 1f, 1f)
     }
 
     private fun drawSubScreenHeader(title: String) {
