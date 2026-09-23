@@ -14,6 +14,8 @@ class AudioManager {
     private var click: Sound? = null
     private var ambience: Sound? = null
     private var achieve: Sound? = null
+    private var alert: Sound? = null
+    private var alarm: Sound? = null
     private var ambiencePlaying = false
     private var initialized = false
     private var prefs: Preferences? = null
@@ -40,6 +42,8 @@ class AudioManager {
         crash = generateSound("crash", 120f, 0.35f)
         click = generateSound("click", 1400f, 0.05f)
         achieve = generateSound("achieve", 1150f, 0.22f)
+        alert = generateSound("alert", 980f, 0.09f)
+        alarm = generateSound("alarm", 130f, 0.6f)
         ambience = generateAmbience()
         if (!muted) startAmbience()
     }
@@ -74,6 +78,14 @@ class AudioManager {
         if (!muted) achieve?.play(0.7f)
     }
 
+    fun playAlert() {
+        if (!muted) alert?.play(0.4f)
+    }
+
+    fun playAlarm() {
+        if (!muted) alarm?.play(0.8f)
+    }
+
     fun dispose() {
         ambience?.stop()
         pickup?.dispose()
@@ -82,12 +94,16 @@ class AudioManager {
         click?.dispose()
         ambience?.dispose()
         achieve?.dispose()
+        alert?.dispose()
+        alarm?.dispose()
         pickup = null
         oxygen = null
         crash = null
         click = null
         ambience = null
         achieve = null
+        alert = null
+        alarm = null
         initialized = false
     }
 

@@ -156,6 +156,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private var achievementToastTimer = 0f
     private var nextMilestone = 50f
     private var bossWarning = 0f
+    private var lowOxyTick = 0f
 
     private var playerSpeed = 320f
     private val playerRadius = 18f
@@ -480,6 +481,16 @@ class DepthDiverGame : ApplicationAdapter() {
             endGame()
         }
 
+        if (oxygen <= maxOxygen * 0.25f) {
+            lowOxyTick -= delta
+            if (lowOxyTick <= 0f) {
+                audio.playAlert()
+                lowOxyTick = 0.85f
+            }
+        } else {
+            lowOxyTick = 0f
+        }
+
         if (comboTimer > 0f) {
             comboTimer -= delta
             if (comboTimer <= 0f) combo = 1
@@ -601,7 +612,10 @@ class DepthDiverGame : ApplicationAdapter() {
             }
             depth > 80f && roll < 0.97f -> {
                 val boss = depth > 120f && MathUtils.random() < 0.06f
-                if (boss) bossWarning = 2.5f
+                if (boss) {
+                    bossWarning = 2.5f
+                    audio.playAlarm()
+                }
                 val w = if (boss) 130f else 84f
                 val h = if (boss) 46f else 30f
                 hazards.add(Hazard.Shark(Rectangle(x, worldHeight + 60f, w, h), 0f, boss))
@@ -1364,6 +1378,17 @@ class DepthDiverGame : ApplicationAdapter() {
 
         if (state == GameState.PAUSED) {
             drawPauseOverlay(glyphLayout, lineHeight)
+        }
+        if (state == GameState.PLAYING && oxygen <= maxOxygen * 0.25f) {
+            val danger = ((maxOxygen * 0.25f - oxygen) / (maxOxygen * 0.25f)).coerceIn(0f, 1f)
+            val alpha = 0.15f * danger * (0.65f + 0.35f * ((MathUtils.sin(elapsed * 5f) + 1f) / 2f))
+            val edge = 26f
+            batch.setColor(1f, 0.1f, 0.08f, alpha)
+            batch.draw(uiPixel, 0f, worldHeight - edge, worldWidth, edge)
+            batch.draw(uiPixel, 0f, 0f, worldWidth, edge)
+            batch.draw(uiPixel, 0f, edge, edge, worldHeight - 2f * edge)
+            batch.draw(uiPixel, worldWidth - edge, edge, edge, worldHeight - 2f * edge)
+            batch.setColor(1f, 1f, 1f, 1f)
         }
         if (state == GameState.GAME_OVER) {
             val centerX = worldWidth / 2f
