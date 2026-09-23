@@ -46,6 +46,10 @@ object Profile {
         prefs.flush()
     }
 
+    fun bestDepth(): Float = prefs.getFloat("bestDepth", 0f)
+
+    fun bestScore(): Int = prefs.getInteger("bestScore", 0)
+
     // ---------- settings ----------
 
     /** 0 = EASY, 1 = NORMAL, 2 = HARD. */

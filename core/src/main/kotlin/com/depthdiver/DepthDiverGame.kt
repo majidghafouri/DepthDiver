@@ -56,7 +56,8 @@ object Strings {
         "difficulty" to "DIFF",
         "easy" to "EASY",
         "normal" to "NORMAL",
-        "hard" to "HARD"
+        "hard" to "HARD",
+        "achievements" to "ACHIEVEMENTS"
     )
     private val locale = EN
 
@@ -130,6 +131,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private val particles = mutableListOf<Particle>()
 
     private var menuTime = 0f
+    private var achievementToast: String? = null
+    private var achievementToastTimer = 0f
 
     private var playerSpeed = 320f
     private val playerRadius = 18f
@@ -257,6 +260,10 @@ class DepthDiverGame : ApplicationAdapter() {
 
     override fun render() {
         menuTime += Gdx.graphics.deltaTime
+        if (achievementToastTimer > 0f) {
+            achievementToastTimer -= Gdx.graphics.deltaTime
+            if (achievementToastTimer <= 0f) achievementToast = null
+        }
         handleInput()
         update(Gdx.graphics.deltaTime)
         draw()
@@ -430,6 +437,14 @@ class DepthDiverGame : ApplicationAdapter() {
             bestScore = score
             prefs.putInteger("bestScore", bestScore)
         }
+
+        val earned = Achievements.checkAndEarn()
+        if (earned != null) {
+            achievementToast = earned
+            achievementToastTimer = 3f
+            audio.playAchieve()
+        }
+
         if (state == GameState.GAME_OVER) {
             prefs.flush()
         }
@@ -944,7 +959,8 @@ class DepthDiverGame : ApplicationAdapter() {
             "${Strings.t("best")} ${Strings.t("score")}" to "$bestScore",
             Strings.t("pearls") to "${Profile.pearls()}",
             Strings.t("pearlsEarned") to "${Profile.lifetimePearls()}",
-            Strings.t("dives") to "${Profile.dives()}"
+            Strings.t("dives") to "${Profile.dives()}",
+            Strings.t("achievements") to "${Achievements.count()}/${Achievements.ALL.size}"
         )
         val labelX = panelCx - panelW / 2f + 34f
         val valueX = panelCx + panelW / 2f - 34f
@@ -1105,6 +1121,18 @@ class DepthDiverGame : ApplicationAdapter() {
             Widgets.pill(batch, font, uiPixel, centerX - 95f, pillY, Strings.t("restart"))
             Widgets.pill(batch, font, uiPixel, centerX + 95f, pillY, Strings.t("menu"))
         }
+        if (achievementToastTimer > 0f) drawAchievementToast()
+    }
+
+    private fun drawAchievementToast() {
+        val s = achievementToast ?: return
+        val layout = GlyphLayout(font, s)
+        val w = layout.width + 48f
+        val h = layout.height + 26f
+        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight - 56f, w, h)
+        font.color = Color.GOLD
+        Widgets.text(batch, font, s, worldWidth / 2f, worldHeight - 56f)
+        font.color = Color.WHITE
     }
 
     private fun drawPauseOverlay(glyphLayout: GlyphLayout, lineHeight: Float) {
