@@ -70,7 +70,11 @@ object Strings {
         "combo" to "COMBO",
         "dailyBonus" to "DAILY FIRST-DIVE BONUS",
         "dailyClaimed" to "DAILY BONUS: CLAIMED TODAY",
-        "dailyReady" to "DAILY BONUS: +25 READY"
+        "dailyReady" to "DAILY BONUS: +25 READY",
+        "zoneSunlit" to "SUNLIT COAST",
+        "zoneReef" to "TURQUOISE REEF",
+        "zoneMidnight" to "MIDNIGHT ZONE",
+        "zoneAbyss" to "ABYSS"
     )
     private val locale = EN
 
@@ -972,6 +976,7 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun drawWorld() {
+        drawWorldBackground()
         val originalCamX = camera.position.x
         val originalCamY = camera.position.y
         if (shakeTimer > 0f) {
@@ -1027,6 +1032,69 @@ class DepthDiverGame : ApplicationAdapter() {
             camera.update()
             batch.projectionMatrix = camera.combined
         }
+    }
+
+    private fun zoneAt(depth: Float): Int = when {
+        depth < 40f -> 0
+        depth < 120f -> 1
+        depth < 300f -> 2
+        else -> 3
+    }
+
+    private fun zoneKey(zone: Int): String = when (zone) {
+        0 -> "zoneSunlit"
+        1 -> "zoneReef"
+        2 -> "zoneMidnight"
+        else -> "zoneAbyss"
+    }
+
+    private fun drawWorldBackground() {
+        val palettes = arrayOf(
+            floatArrayOf(0.05f, 0.30f, 0.46f, 0.02f, 0.13f, 0.28f),
+            floatArrayOf(0.02f, 0.22f, 0.40f, 0.008f, 0.09f, 0.20f),
+            floatArrayOf(0.008f, 0.12f, 0.19f, 0.003f, 0.04f, 0.085f),
+            floatArrayOf(0.005f, 0.055f, 0.085f, 0.002f, 0.012f, 0.03f)
+        )
+        val z = zoneAt(depth)
+        val p = when (z) {
+            0 -> (depth / 40f).coerceIn(0f, 1f)
+            1 -> ((depth - 40f) / 80f).coerceIn(0f, 1f)
+            2 -> ((depth - 120f) / 180f).coerceIn(0f, 1f)
+            else -> 0f
+        }
+        val a = palettes[z]
+        val b = palettes[if (z >= 3) z else z + 1]
+        fun lerp(ai: Int, bi: Int) = a[ai] + (b[bi] - a[ai]) * p
+        val topR = lerp(0, 0)
+        val topG = lerp(1, 1)
+        val topB = lerp(2, 2)
+        val botR = lerp(3, 3)
+        val botG = lerp(4, 4)
+        val botB = lerp(5, 5)
+
+        val bands = 16
+        val bandH = worldHeight / bands
+        for (i in 0 until bands) {
+            val t = (i + 1f) / bands
+            batch.setColor(
+                topR + (botR - topR) * t,
+                topG + (botG - topG) * t,
+                topB + (botB - topB) * t,
+                1f
+            )
+            batch.draw(uiPixel, 0f, i * bandH - 1f, worldWidth, bandH + 2f)
+        }
+
+        val streakCount = 5
+        for (i in 0 until streakCount) {
+            val x = ((i * 31) % 100) / 100f * worldWidth
+            val speed = 26f + (i % 3) * 14f
+            val start = ((i * 47) % 100) / 100f * (worldHeight + 100f)
+            val y = (start + elapsed * speed) % (worldHeight + 100f) - 50f
+            batch.setColor(1f, 1f, 1f, 0.045f)
+            batch.draw(uiPixel, x - 70f, y - 1f, 140f, 2f)
+        }
+        batch.setColor(1f, 1f, 1f, 1f)
     }
 
     private fun drawMainMenu() {
@@ -1221,6 +1289,11 @@ class DepthDiverGame : ApplicationAdapter() {
         val colGap = 22f
 
         var y = worldHeight - lineHeight - padding
+
+        font.color = Color(0.6f, 0.85f, 1f, 0.9f)
+        glyphLayout.setText(font, Strings.t(zoneKey(zoneAt(depth))))
+        font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, y)
+        font.color = Color.WHITE
 
         val depthStr = "${Strings.t("depth")}: ${depth.toInt()} m"
         glyphLayout.setText(font, depthStr)
