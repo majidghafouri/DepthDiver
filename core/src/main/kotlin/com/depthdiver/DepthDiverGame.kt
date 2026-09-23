@@ -66,6 +66,10 @@ class DepthDiverGame : ApplicationAdapter() {
     private val hazards = mutableListOf<Hazard>()
     private val pickups = mutableListOf<Pickup>()
     private var state: GameState = GameState.PLAYING
+    private var hudPauseCx = 0f
+    private var hudPauseCy = 0f
+    private var hudPauseW = 0f
+    private var hudPauseH = 0f
 
     private val audio = AudioManager()
 
@@ -496,7 +500,7 @@ class DepthDiverGame : ApplicationAdapter() {
             val tx = Gdx.input.x.toFloat()
             val ty = worldHeight - Gdx.input.y.toFloat()
             if (state == GameState.PLAYING) {
-                if (pillAt(tx, ty, worldWidth - 44f, worldHeight - 30f, 56f, 30f) || state == GameState.PLAYING && false) {
+                if (pillAt(tx, ty, hudPauseCx, hudPauseCy, hudPauseW, hudPauseH)) {
                     state = GameState.PAUSED
                     return
                 }
@@ -610,7 +614,9 @@ class DepthDiverGame : ApplicationAdapter() {
         val lineHeight = glyphLayout.height
         val padding = 6f
         val lineSpacing = 8f
+        val lineSpacing2 = 6f
         val colGap = 22f
+        val hudPad = 6f
 
         var y = worldHeight - lineHeight - padding
 
@@ -621,6 +627,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
         val scoreStr = "${Strings.t("score")}: $score"
         glyphLayout.setText(font, scoreStr)
+        val scoreW = glyphLayout.width
         val scoreX = 10f + depthW + colGap
         font.draw(batch, glyphLayout, scoreX, y)
 
@@ -634,14 +641,18 @@ class DepthDiverGame : ApplicationAdapter() {
         glyphLayout.setText(font, bestStr)
         font.draw(batch, glyphLayout, bestX, y)
 
-        if (state == GameState.PLAYING) {
-            drawPill(batch, font, pausePillRight - pausePillW / 2f, y + lineHeight / 2f, pausePillW, 30f, Strings.t("pause"))
-        }
-
         y -= lineHeight + lineSpacing
         val oxygenStr = "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%"
         glyphLayout.setText(font, oxygenStr)
         font.draw(batch, glyphLayout, 10f, y)
+
+        if (state == GameState.PLAYING) {
+            drawPill(batch, font, bestX + bestW / 2f, y - lineHeight / 2f, pausePillW, 30f, Strings.t("pause"))
+        }
+        hudPauseCx = bestX + bestW / 2f
+        hudPauseCy = y - lineHeight / 2f
+        hudPauseW = pausePillW
+        hudPauseH = 30f
 
         if (state == GameState.PAUSED) {
             val centerX = worldWidth / 2f
@@ -702,11 +713,23 @@ class DepthDiverGame : ApplicationAdapter() {
         h: Float,
         label: String
     ) {
-        batch.setColor(0f, 0f, 0f, 0.55f)
-        batch.draw(uiPixel, cx - w / 2f, cy - h / 2f, w, h)
+        val layout = GlyphLayout(font, label)
+        val w2 = layout.width + 26f
+        val h2 = layout.height + 16f
+        batch.setColor(0f, 0f, 0f, 0.30f)
+        batch.draw(uiPixel, cx - w2 / 2f + 4f, cy - h2 / 2f - 4f, w2, h2)
+        batch.setColor(0.14f, 0.24f, 0.42f, 0.90f)
+        batch.draw(uiPixel, cx - w2 / 2f, cy - h2 / 2f, w2, h2)
+        batch.setColor(0.34f, 0.52f, 0.78f, 0.55f)
+        batch.draw(uiPixel, cx - w2 / 2f, cy, w2, h2 / 2f)
+        batch.setColor(0.95f, 0.97f, 1f, 0.95f)
+        val b = 2f
+        batch.draw(uiPixel, cx - w2 / 2f, cy - h2 / 2f, w2, b)
+        batch.draw(uiPixel, cx - w2 / 2f, cy + h2 / 2f - b, w2, b)
+        batch.draw(uiPixel, cx - w2 / 2f, cy - h2 / 2f, b, h2)
+        batch.draw(uiPixel, cx + w2 / 2f - b, cy - h2 / 2f, b, h2)
         batch.setColor(Color.WHITE)
         font.color = Color.WHITE
-        val layout = GlyphLayout(font, label)
         font.draw(batch, layout, cx - layout.width / 2f, cy + layout.height / 2f)
     }
 
