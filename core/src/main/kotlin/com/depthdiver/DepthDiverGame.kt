@@ -64,7 +64,9 @@ object Strings {
         "bossCleared" to "LEVIATHAN CLEARED",
         "quickBuy" to "QUICK BUY",
         "reachedDepth" to "REACHED DEPTH",
-        "pearlsGained" to "PEARLS GAINED"
+        "pearlsGained" to "PEARLS GAINED",
+        "milestone" to "MILESTONE",
+        "leviathan" to "LEVIATHAN AHEAD!"
     )
     private val locale = EN
 
@@ -143,6 +145,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var menuTime = 0f
     private var achievementToast: String? = null
     private var achievementToastTimer = 0f
+    private var nextMilestone = 50f
+    private var bossWarning = 0f
 
     private var playerSpeed = 320f
     private val playerRadius = 18f
@@ -296,6 +300,7 @@ class DepthDiverGame : ApplicationAdapter() {
             achievementToastTimer -= Gdx.graphics.deltaTime
             if (achievementToastTimer <= 0f) achievementToast = null
         }
+        if (bossWarning > 0f) bossWarning -= Gdx.graphics.deltaTime
         handleInput()
         update(Gdx.graphics.deltaTime)
         draw()
@@ -480,6 +485,17 @@ class DepthDiverGame : ApplicationAdapter() {
             audio.playAchieve()
         }
 
+        while (depth >= nextMilestone) {
+            val m = nextMilestone
+            nextMilestone += 50f
+            runPearls += 10
+            Profile.addPearls(10)
+            Profile.addLifetimePearls(10)
+            achievementToast = "${Strings.t("milestone")} ${m.toInt()} M +10"
+            achievementToastTimer = 3f
+            audio.playAchieve()
+        }
+
         if (state == GameState.GAME_OVER) {
             prefs.flush()
         }
@@ -569,6 +585,7 @@ class DepthDiverGame : ApplicationAdapter() {
             }
             depth > 80f && roll < 0.97f -> {
                 val boss = depth > 120f && MathUtils.random() < 0.06f
+                if (boss) bossWarning = 2.5f
                 val w = if (boss) 130f else 84f
                 val h = if (boss) 46f else 30f
                 hazards.add(Hazard.Shark(Rectangle(x, worldHeight + 60f, w, h), 0f, boss))
@@ -1216,6 +1233,13 @@ class DepthDiverGame : ApplicationAdapter() {
         font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, y)
         font.color = Color.WHITE
 
+        if (bossWarning > 0f) {
+            font.color = Color(1f, 0.35f, 0.3f, 1f)
+            glyphLayout.setText(font, Strings.t("leviathan"))
+            font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, y - lineHeight * 1.4f)
+            font.color = Color.WHITE
+        }
+
         var pauseW = pausePillW
         var pauseH = 30f
         if (state == GameState.PLAYING) {
@@ -1395,6 +1419,8 @@ class DepthDiverGame : ApplicationAdapter() {
         shieldActive = false
         shieldCooldown = 0f
         runPearls = 0
+        nextMilestone = 50f
+        bossWarning = 0f
         hazards.clear()
         pickups.clear()
         particles.clear()
