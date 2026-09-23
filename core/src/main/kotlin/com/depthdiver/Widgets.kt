@@ -5,7 +5,6 @@ import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
-import kotlin.math.min
 
 /** Lightweight HUD/menu widget helpers used by every screen. */
 object Widgets {
@@ -64,21 +63,37 @@ object Widgets {
         font.draw(batch, layout, x - layout.width, y)
     }
 
-    /** Vertical stack position (cx, cy) for the [index]-th of [count] menu buttons.
-     *  Tall screens use a single centered column; short (landscape) screens switch to a 2-column grid. */
-    fun stack(worldW: Float, worldH: Float, index: Int, count: Int): Pair<Float, Float> {
-        if (worldH >= 520f) {
-            val gap = min(58f, worldH * 0.9f / (count + 1))
-            val startY = worldH * 0.80f - gap * (count - 1) / 2f
-            return worldW / 2f to startY - index * gap
-        }
-        val rows = (count + 1) / 2
-        val gap = min(54f, worldH / (rows + 2))
-        val startY = worldH * 0.80f - gap * (rows - 1) / 2f
-        val col = index % 2
-        val row = index / 2
-        val cx = worldW * if (col == 0) 0.35f else 0.65f
-        return cx to startY - row * gap
+    /** EASY / NORMAL / HARD-style segmented option. The [selected] segment glows
+     *  with a saturated fill + bright border so the active pick reads instantly. */
+    fun segment(
+        batch: SpriteBatch,
+        font: BitmapFont,
+        pixel: Texture,
+        cx: Float,
+        cy: Float,
+        w: Float,
+        h: Float,
+        label: String,
+        selected: Boolean
+    ) {
+        batch.setColor(0f, 0f, 0f, 0.30f)
+        batch.draw(pixel, cx - w / 2f + 3f, cy - h / 2f - 3f, w, h)
+        batch.setColor(
+            if (selected) 0.06f else 0.13f,
+            if (selected) 0.42f else 0.20f,
+            if (selected) 0.85f else 0.38f,
+            if (selected) 0.95f else 0.70f
+        )
+        batch.draw(pixel, cx - w / 2f, cy - h / 2f, w, h)
+        val b = 2f
+        batch.setColor(if (selected) 0.35f else 0.22f, if (selected) 0.92f else 0.40f, if (selected) 1f else 0.62f, 1f)
+        batch.draw(pixel, cx - w / 2f, cy + h / 2f - b, w, b)
+        batch.draw(pixel, cx - w / 2f, cy - h / 2f, w, b)
+        batch.setColor(Color.WHITE)
+        font.color = if (selected) Color.WHITE else Color(0.55f, 0.68f, 0.85f, 1f)
+        val layout = GlyphLayout(font, label)
+        font.draw(batch, layout, cx - layout.width / 2f, cy + layout.height / 2f)
+        font.color = Color.WHITE
     }
 
     /** Dark translucent panel behind menu content to make labels pop. */

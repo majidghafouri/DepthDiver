@@ -822,22 +822,44 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun difficultyLabel(): String =
         "${Strings.t("difficulty")}: ${Strings.t(currentDifficulty().name.lowercase())}"
 
-    private fun difficultyPillPos(): Pair<Float, Float> {
-        val cx = minOf(worldWidth * 0.88f, worldWidth - Widgets.pillW(font, difficultyLabel()) / 2f - 12f)
-        return cx to worldHeight * 0.045f
+    /** 2-column button grid used by the main menu. */
+    private fun menuGridPos(i: Int): Pair<Float, Float> {
+        val rows = (menuLabels().size + 1) / 2
+        val gap = min(72f, worldHeight * 0.115f)
+        val startY = worldHeight * 0.64f
+        val row = i / 2
+        val col = i % 2
+        val cx = worldWidth * (if (col == 0) 0.335f else 0.665f)
+        return cx to (startY - row * gap)
+    }
+
+    /** EASY / NORMAL / HARD segmented controls, well clear of gesture bars. */
+    private fun difficultySegs(): Array<FloatArray> {
+        val w = max(196f, Widgets.pillW(font, Strings.t("normal")) + 10f)
+        val h = Widgets.pillH(font, Strings.t("normal"))
+        val cy = worldHeight * 0.10f
+        val gap = w + 18f
+        return arrayOf(
+            floatArrayOf(worldWidth / 2f - gap, cy, w, h, 0f),
+            floatArrayOf(worldWidth / 2f, cy, w, h, 1f),
+            floatArrayOf(worldWidth / 2f + gap, cy, w, h, 2f)
+        )
     }
 
     private fun handleMenuTouch(tx: Float, ty: Float) {
-        val dLabel = difficultyLabel()
-        val (dcx, dcy) = difficultyPillPos()
-        if (Widgets.contains(tx, ty, dcx, dcy, Widgets.pillW(font, dLabel), Widgets.pillH(font, dLabel))) {
-            Profile.setDifficulty((Profile.difficulty() + 1) % Difficulty.values().size)
-            audio.playClick()
-            return
+        for (s in difficultySegs()) {
+            if (Widgets.contains(tx, ty, s[0], s[1], s[2], s[3])) {
+                val index = s[4].toInt()
+                if (index != Profile.difficulty()) {
+                    Profile.setDifficulty(index)
+                    audio.playClick()
+                }
+                return
+            }
         }
         val labels = menuLabels()
         for (i in labels.indices) {
-            val (cx, cy) = Widgets.stack(worldWidth, worldHeight, i, labels.size)
+            val (cx, cy) = menuGridPos(i)
             if (Widgets.contains(tx, ty, cx, cy, Widgets.pillW(font, labels[i]), Widgets.pillH(font, labels[i]))) {
                 engage(i)
                 return
@@ -1191,11 +1213,21 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun drawMainMenu() {
         drawMenuBackground()
+        drawMenuVignette()
 
         val pulse = 0.5f + 0.5f * MathUtils.sin(menuTime * 1.8f)
+        val titleY = worldHeight * 0.86f
+        titleFont.color = Color(0.12f, 0.5f, 0.95f, 0.22f + 0.15f * pulse)
+        for (off in floatArrayOf(-3f, 3f)) {
+            Widgets.text(batch, titleFont, Strings.t("menuTitle"), worldWidth / 2f + off, titleY)
+        }
         titleFont.color = Color(0.4f + 0.5f * pulse, 0.87f, 1f, 1f)
-        Widgets.text(batch, titleFont, Strings.t("menuTitle"), worldWidth / 2f, worldHeight * 0.86f)
+        Widgets.text(batch, titleFont, Strings.t("menuTitle"), worldWidth / 2f, titleY)
         titleFont.color = Color(0.35f, 0.85f, 1f, 1f)
+        batch.setColor(0.2f, 0.78f, 1f, 0.55f)
+        batch.draw(uiPixel, worldWidth / 2f - 170f, titleY - 26f, 340f, 4f)
+        batch.draw(uiPixel, worldWidth / 2f - 110f, titleY - 35f, 220f, 3f)
+        batch.setColor(Color.WHITE)
 
         if (worldHeight >= 520f) {
             font.color = Color.CYAN
@@ -1204,14 +1236,39 @@ class DepthDiverGame : ApplicationAdapter() {
         font.color = Color.WHITE
         val labels = menuLabels()
         for (i in labels.indices) {
-            val (cx, cy) = Widgets.stack(worldWidth, worldHeight, i, labels.size)
+            val (cx, cy) = menuGridPos(i)
             Widgets.pill(batch, font, uiPixel, cx, cy, labels[i])
         }
-        val (dcx, dcy) = difficultyPillPos()
-        Widgets.pill(batch, font, uiPixel, dcx, dcy, difficultyLabel())
-        font.color = Color.CYAN
-        Widgets.text(batch, font, "P/Esc ${Strings.t("pause").lowercase()} · M ${Strings.t("muteOff").lowercase()}", worldWidth / 2f, worldHeight * 0.035f)
+
+        val segs = difficultySegs()
+        font.color = Color(0.5f, 0.8f, 1f, 0.85f)
+        Widgets.text(batch, font, Strings.t("difficulty"), worldWidth / 2f, segs[0][1] + segs[0][3] / 2f + 18f)
         font.color = Color.WHITE
+        val current = Profile.difficulty()
+        val names = listOf("easy", "normal", "hard")
+        for (s in segs) {
+            Widgets.segment(
+                batch,
+                font,
+                uiPixel,
+                s[0],
+                s[1],
+                s[2],
+                s[3],
+                Strings.t(names[s[4].toInt()]),
+                selected = s[4].toInt() == current
+            )
+        }
+    }
+
+    private fun drawMenuVignette() {
+        val edge = worldHeight * 0.06f
+        batch.setColor(0f, 0.03f, 0.09f, 0.40f)
+        batch.draw(uiPixel, 0f, worldHeight - edge, worldWidth, edge)
+        batch.draw(uiPixel, 0f, 0f, worldWidth, edge)
+        batch.draw(uiPixel, 0f, edge, edge, worldHeight - 2f * edge)
+        batch.draw(uiPixel, worldWidth - edge, edge, edge, worldHeight - 2f * edge)
+        batch.setColor(Color.WHITE)
     }
 
     private fun drawMenuBackground() {

@@ -168,6 +168,11 @@ adb shell am start -n app.depthdiver/app.deepdepthdiver.AndroidLauncher
   ranking, upgrade cost math, daily bonus, achievements gating, challenge
   rotation) run with `./gradlew :core:test` — they inject `TestPreferences`, an
   in-memory `Preferences` so `Gdx` isn't required.
+- **Persistence gotcha:** libGDX's Android `Preferences` buffers each write in a
+  per-wrapper editor, and `flush()` is a *no-op* on a wrapper with no pending
+  edit — so `prefs.put(key, v)` followed by `prefs.flush()` must reuse ONE
+  instance. Every mutator caches a single wrapper (`Profile.retained`, etc.);
+  `FlakyPreferences` reproduces the Android semantics in the test suite.
 - **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the headless tests
   and a desktop compile on every push/PR, and assembles the debug APK against
   a setup Android SDK.
