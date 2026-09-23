@@ -62,7 +62,9 @@ object Strings {
         "locked" to "LOCKED",
         "allDone" to "ALL ACHIEVEMENTS UNLOCKED",
         "bossCleared" to "LEVIATHAN CLEARED",
-        "quickBuy" to "QUICK BUY"
+        "quickBuy" to "QUICK BUY",
+        "reachedDepth" to "REACHED DEPTH",
+        "pearlsGained" to "PEARLS GAINED"
     )
     private val locale = EN
 
@@ -111,6 +113,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private var bestScore = 0
     private var leaderboardMade = false
     private var startBestScore = 0
+    private var runPearls = 0
 
     private var upgradeOxygenLevel = 0
     private var upgradeSpeedLevel = 0
@@ -446,6 +449,7 @@ class DepthDiverGame : ApplicationAdapter() {
                         comboTimer = 5f + upgradeComboLevel * 2f
                         val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5)).toInt()
                         score += pearlValue * combo
+                        runPearls += pearlValue
                         Profile.addPearls(pearlValue)
                         Profile.addLifetimePearls(pearlValue)
                         audio.playPickup()
@@ -578,6 +582,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun onBossEscaped() {
         val bonus = 50
+        runPearls += bonus
         Profile.addPearls(bonus)
         Profile.addLifetimePearls(bonus)
         achievementToast = "${Strings.t("bossCleared")} +$bonus"
@@ -680,7 +685,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 if (Gdx.input.justTouched()) {
                     val tx = touchX()
                     val ty = touchY()
-                    val pillY = worldHeight / 2f - 118f
+                    val pillY = gameOverPillY()
                     val menu = Strings.t("menu")
                     if (Widgets.contains(tx, ty, worldWidth / 2f + 95f, pillY, Widgets.pillW(font, menu), Widgets.pillH(font, menu))) {
                         goToMenu()
@@ -868,6 +873,9 @@ class DepthDiverGame : ApplicationAdapter() {
         menuTime = 0f
         state = GameState.MAIN_MENU
     }
+
+    private fun gameOverPillY(): Float =
+        if (worldHeight >= 560f) worldHeight / 2f - 145f else worldHeight / 2f - 118f
 
     private fun handlePauseTouch(tx: Float, ty: Float) {
         val labels = listOf(Strings.t("resume")) + listOf(Strings.t("menu"))
@@ -1226,30 +1234,67 @@ class DepthDiverGame : ApplicationAdapter() {
         if (state == GameState.GAME_OVER) {
             val centerX = worldWidth / 2f
             val centerY = worldHeight / 2f
+            val pillY = gameOverPillY()
 
             font.color = Color.RED
             val gameOverStr = "${Strings.t("gameOver")} - ${Strings.t("pressR")}"
             glyphLayout.setText(font, gameOverStr)
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + glyphLayout.height / 2f + 16f)
+            val titleY = if (worldHeight >= 560f) centerY + 150f else centerY + glyphLayout.height / 2f + 16f
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, titleY)
 
-            font.color = Color.GOLD
-            val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
-            glyphLayout.setText(font, bestStr)
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f)
+            if (worldHeight >= 560f) {
+                if (score > startBestScore) {
+                    font.color = Color.GOLD
+                    glyphLayout.setText(font, Strings.t("newRecord"))
+                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + 116f)
+                }
+                if (leaderboardMade) {
+                    font.color = Color.GOLD
+                    glyphLayout.setText(font, Strings.t("top5"))
+                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + 86f)
+                }
 
-            if (leaderboardMade) {
+                val panelCx = centerX
+                val panelCy = centerY
+                val panelW = min(worldWidth * 0.75f, 460f)
+                val panelH = 154f
+                Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
+
+                val rows = listOf(
+                    Pair(Strings.t("reachedDepth"), "${depth.toInt()} m"),
+                    Pair(Strings.t("score"), "$score"),
+                    Pair(Strings.t("pearlsGained"), "+$runPearls"),
+                    Pair("${Strings.t("best")} ${Strings.t("depth")}", "  ${bestDepth.toInt()} m  ${Strings.t("score")} $bestScore")
+                )
+                val labelX = panelCx - panelW / 2f + 30f
+                val valueX = panelCx + panelW / 2f - 30f
+                val lineGap = min(30f, panelH / (rows.size + 1))
+                rows.forEachIndexed { i, (label, value) ->
+                    val cy = panelCy - panelH / 2f + 24f + lineGap * i
+                    font.color = Color.WHITE
+                    Widgets.textLeft(batch, font, label, labelX, cy)
+                    font.color = Color.GOLD
+                    Widgets.textRight(batch, font, value, valueX, cy)
+                }
+                font.color = Color.WHITE
+            } else {
                 font.color = Color.GOLD
-                glyphLayout.setText(font, Strings.t("top5"))
-                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f - lineHeight * 1.6f)
-            }
-            if (score > startBestScore) {
-                font.color = Color.GOLD
-                glyphLayout.setText(font, Strings.t("newRecord"))
-                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + glyphLayout.height / 2f + 16f + lineHeight * 1.6f)
+                val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
+                glyphLayout.setText(font, bestStr)
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f)
+                if (leaderboardMade) {
+                    font.color = Color.GOLD
+                    glyphLayout.setText(font, Strings.t("top5"))
+                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f - lineHeight * 1.6f)
+                }
+                if (score > startBestScore) {
+                    font.color = Color.GOLD
+                    glyphLayout.setText(font, Strings.t("newRecord"))
+                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + glyphLayout.height / 2f + 16f + lineHeight * 1.6f)
+                }
             }
             font.color = Color.WHITE
 
-            val pillY = centerY - 118f
             Widgets.pill(batch, font, uiPixel, centerX - 95f, pillY, Strings.t("restart"))
             Widgets.pill(batch, font, uiPixel, centerX + 95f, pillY, Strings.t("menu"))
         }
@@ -1349,6 +1394,7 @@ class DepthDiverGame : ApplicationAdapter() {
         comboTimer = 0f
         shieldActive = false
         shieldCooldown = 0f
+        runPearls = 0
         hazards.clear()
         pickups.clear()
         particles.clear()
