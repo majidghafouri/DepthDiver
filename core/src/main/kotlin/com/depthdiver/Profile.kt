@@ -65,6 +65,18 @@ object Profile {
 
     fun bestScore(): Int = prefs().getInteger("bestScore", 0)
 
+    /** Best single-run pearl haul — the target for daily pearl challenges. */
+    fun bestRunPearls(): Int = prefs().getInteger("bestRunPearls", 0)
+
+    /** Record a run's collected pearls, keeping the best on record. */
+    fun noteRun(pearls: Int) {
+        if (pearls > bestRunPearls()) {
+            val p = prefs()
+            p.putInteger("bestRunPearls", pearls)
+            p.flush()
+        }
+    }
+
     // ---------- daily bonus ----------
 
     /** Day index in UTC (24 h buckets) — avoids needing java.time on older Android. */

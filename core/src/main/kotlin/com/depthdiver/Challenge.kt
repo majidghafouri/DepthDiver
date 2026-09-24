@@ -31,10 +31,10 @@ object Challenge {
             Kind.Score -> score >= target
         }
 
-        /** Readable objective using lifetime-best stats for the profile screen. */
-        fun summary(bestDepth: Float, lifetimePearls: Int, bestScore: Int): String = when (kind) {
+        /** Readable objective using best-on-record stats for the profile screen. */
+        fun summary(bestDepth: Float, bestRunPearls: Int, bestScore: Int): String = when (kind) {
             Kind.Depth -> "${Strings.t("chReach")} $target m (${bestDepth.toInt()} / $target)"
-            Kind.Pearls -> "${Strings.t("chCollect")} $target (${lifetimePearls} / $target)"
+            Kind.Pearls -> "${Strings.t("chCollect")} $target (${bestRunPearls} / $target)"
             Kind.Score -> "${Strings.t("chScore")} $target (${bestScore} / $target)"
         }
     }

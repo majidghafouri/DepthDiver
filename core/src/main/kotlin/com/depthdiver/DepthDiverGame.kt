@@ -54,6 +54,7 @@ object Strings {
         "level" to "LVL",
         "buy" to "BUY",
         "max" to "MAX",
+        "claim" to "CLAIM",
         "difficulty" to "DIFF",
         "easy" to "EASY",
         "normal" to "NORMAL",
@@ -821,7 +822,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun touchX(): Float = Gdx.input.x.toFloat()
 
-    private fun touchY(): Float = worldHeight - Gdx.input.y.toFloat()
+    private fun touchY(): Float = Gdx.graphics.height.toFloat() - Gdx.input.y.toFloat()
 
     private fun menuLabels(): List<String> = listOf(
         Strings.t("play"),
@@ -912,6 +913,20 @@ class DepthDiverGame : ApplicationAdapter() {
         if (Widgets.contains(tx, ty, worldWidth * 0.8f, worldHeight * 0.08f, Widgets.pillW(font, achLabel), Widgets.pillH(font, achLabel))) {
             state = GameState.ACHIEVEMENTS
             audio.playClick()
+            return
+        }
+        val day = Profile.dailyDay()
+        val active = Challenge.activeFor(day)
+        if (!Challenge.claimedFor(active) && active.met(bestDepth, Profile.bestRunPearls(), bestScore)) {
+            val label = "${Strings.t("claim")} +${Challenge.REWARD}"
+            if (Widgets.contains(tx, ty, worldWidth / 2f, profileClaimCy(), Widgets.pillW(font, label), Widgets.pillH(font, label))) {
+                Challenge.claim(active)
+                Profile.addPearls(Challenge.REWARD)
+                Profile.addLifetimePearls(Challenge.REWARD)
+                achievementToast = "${Strings.t("claim")} +${Challenge.REWARD}"
+                achievementToastTimer = 2.5f
+                audio.playClick()
+            }
         }
     }
 
@@ -1090,10 +1105,22 @@ class DepthDiverGame : ApplicationAdapter() {
         } else {
             when (state) {
                 GameState.MAIN_MENU -> drawMainMenu()
-                GameState.PROFILE -> drawProfileScreen()
-                GameState.LEADERBOARD -> drawLeaderboardScreen()
-                GameState.SHOP -> drawShopScreen()
-                GameState.ACHIEVEMENTS -> drawAchievementsScreen()
+                GameState.PROFILE -> {
+                    drawMenuBackgroundBlur()
+                    drawProfileScreen()
+                }
+                GameState.LEADERBOARD -> {
+                    drawMenuBackgroundBlur()
+                    drawLeaderboardScreen()
+                }
+                GameState.SHOP -> {
+                    drawMenuBackgroundBlur()
+                    drawShopScreen()
+                }
+                GameState.ACHIEVEMENTS -> {
+                    drawMenuBackgroundBlur()
+                    drawAchievementsScreen()
+                }
                 GameState.PLAYING, GameState.PAUSED, GameState.GAME_OVER -> {}
             }
         }
@@ -1436,25 +1463,36 @@ class DepthDiverGame : ApplicationAdapter() {
             Widgets.textRight(batch, font, value, valueX, cy)
         }
         font.color = Color.WHITE
-        val panelBottom = panelCy - panelH / 2f
+        val day = Profile.dailyDay()
+        val activeCh = Challenge.activeFor(day)
+        val chClaimed = Challenge.claimedFor(activeCh)
+        val chMet = activeCh.met(bestDepth, Profile.bestRunPearls(), bestScore)
+
         font.color = Color.GOLD
         Widgets.text(
             batch,
             font,
-            if (Profile.claimedDailyDay() == Profile.dailyDay()) Strings.t("dailyClaimed") else Strings.t("dailyReady"),
+            if (Profile.claimedDailyDay() == day) Strings.t("dailyClaimed") else Strings.t("dailyReady"),
             panelCx,
-            panelBottom - 30f
+            panelCy - 70f
         )
-        val activeCh = Challenge.activeFor(Profile.dailyDay())
-        val chText = if (Challenge.claimedFor(activeCh)) {
+        val chText = if (chClaimed) {
             Strings.t("chDone")
         } else {
-            activeCh.summary(bestDepth, Profile.lifetimePearls(), bestScore)
+            activeCh.summary(bestDepth, Profile.bestRunPearls(), bestScore)
         }
         font.color = Color.CYAN
-        Widgets.text(batch, font, chText, panelCx, panelBottom - 30f - 48f)
+        Widgets.text(batch, font, chText, panelCx, panelCy - 116f)
+
+        if (!chClaimed) {
+            val claimLabel = "${Strings.t("claim")} +${Challenge.REWARD}"
+            Widgets.pill(batch, font, uiPixel, panelCx, profileClaimCy(), claimLabel, enabled = chMet)
+        }
         font.color = Color.WHITE
     }
+
+    /** Claim button for the daily challenge on the profile screen. */
+    private fun profileClaimCy(): Float = worldHeight / 2f - 168f
 
     private fun drawAchievementsScreen() {
         drawSubScreenHeader(Strings.t("achievements"))
@@ -1802,6 +1840,7 @@ class DepthDiverGame : ApplicationAdapter() {
             leaderboardMade = Leaderboard.qualifies(score, depth)
             Leaderboard.submit(score, depth)
             Profile.recordDive()
+            Profile.noteRun(runPearls)
             val day = Profile.dailyDay()
             if (Profile.claimedDailyDay() != day) {
                 Profile.claimDaily(day)
