@@ -17,6 +17,8 @@ import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
 import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
+import com.depthdiver.game.BackAction
+import com.depthdiver.game.DifficultyCurve
 import com.depthdiver.game.FixedStepClock
 import com.depthdiver.game.GameAction
 import com.depthdiver.game.GameFlow
@@ -28,6 +30,7 @@ import com.depthdiver.game.PLAYER_RADIUS_METERS
 import com.depthdiver.game.ProceduralFairness
 import com.depthdiver.game.WORLD_WIDTH_METERS
 import com.depthdiver.game.WorldViewSpec
+import com.depthdiver.game.backActionFor
 import com.depthdiver.run.BonusCategory
 import com.depthdiver.run.RunLedger
 import com.depthdiver.run.RunSettlement
@@ -437,6 +440,22 @@ class DepthDiverGame : ApplicationAdapter() {
         gameplayClock.reset()
     }
 
+    fun handleSystemBack(): Boolean = when (backActionFor(state)) {
+        BackAction.EXIT -> false
+        BackAction.PAUSE -> {
+            pauseGame()
+            true
+        }
+        BackAction.RESUME -> {
+            resumeGame()
+            true
+        }
+        BackAction.MAIN_MENU -> {
+            goToMenu()
+            true
+        }
+    }
+
     private fun pauseGame() {
         if (state != GameState.PLAYING) return
         try {
@@ -546,7 +565,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
         elapsed += delta
         val diff = currentDifficulty()
-        oxygen -= delta * diff.drain
+        oxygen -= delta * DifficultyCurve.oxygenDrain(diff.drain, depth)
         if (oxygen <= 0f) {
             oxygen = 0f
             endGame(RunTerminalReason.OXYGEN)
@@ -579,13 +598,18 @@ class DepthDiverGame : ApplicationAdapter() {
             }
         }
 
-        val depthFactor = (depth / WORLD_WIDTH_METERS).coerceAtLeast(0f)
-        val scrollSpeed = diff.baseScrollMeters + depthFactor * diff.rampMetersPerSecond
+        val scrollSpeed = DifficultyCurve.scrollSpeed(
+            baseMetersPerSecond = diff.baseScrollMeters,
+            rampMetersPerSecond = diff.rampMetersPerSecond,
+            depthMeters = depth,
+            playerSpeedMetersPerSecond = playerSpeed,
+        )
 
         hazardTimer -= delta
         if (hazardTimer <= 0) {
             spawnHazard()
-            hazardTimer = fairness.hazardInterval(1.4f, 2.6f, depth, diff.spawnMul)
+            val interval = DifficultyCurve.hazardIntervalRange(1.4f, 2.6f, depth, diff.spawnMul)
+            hazardTimer = fairness.range(interval.minimum, interval.maximum)
         }
         pickupTimer -= delta
         if (pickupTimer <= 0) {
@@ -845,16 +869,17 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun handleInput() {
-        val escJust = Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || Gdx.input.isKeyJustPressed(Input.Keys.BACK)
+        val escJust = Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)
         val pJust = Gdx.input.isKeyJustPressed(Input.Keys.P)
         val mJust = Gdx.input.isKeyJustPressed(Input.Keys.M)
 
+        if (escJust || pJust) {
+            if (!handleSystemBack()) Gdx.app.exit()
+            return
+        }
+
         when (state) {
             GameState.MAIN_MENU -> {
-                if (escJust || pJust) {
-                    Gdx.app.exit()
-                    return
-                }
                 if (mJust) {
                     audio.toggleMute()
                     audio.playClick()
@@ -866,10 +891,6 @@ class DepthDiverGame : ApplicationAdapter() {
             }
 
             GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP, GameState.ACHIEVEMENTS -> {
-                if (escJust || pJust) {
-                    goToMenu()
-                    return
-                }
                 if (Gdx.input.justTouched()) {
                     when (state) {
                         GameState.SHOP -> handleShopTouch(touchX(), touchY())
@@ -880,10 +901,6 @@ class DepthDiverGame : ApplicationAdapter() {
             }
 
             GameState.PLAYING -> {
-                if (escJust || pJust) {
-                    pauseGame()
-                    return
-                }
                 if (mJust) {
                     audio.toggleMute()
                     return
@@ -899,10 +916,6 @@ class DepthDiverGame : ApplicationAdapter() {
             }
 
             GameState.PAUSED -> {
-                if (escJust || pJust) {
-                    resumeGame()
-                    return
-                }
                 if (mJust) {
                     audio.toggleMute()
                     return
@@ -918,10 +931,6 @@ class DepthDiverGame : ApplicationAdapter() {
             }
 
             GameState.GAME_OVER -> {
-                if (escJust || pJust) {
-                    goToMenu()
-                    return
-                }
                 if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
                     restartRun()
                     return

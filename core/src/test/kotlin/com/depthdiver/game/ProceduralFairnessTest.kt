@@ -236,17 +236,15 @@ class ProceduralFairnessTest {
     }
 
     @Test
-    fun intervalsRemainPositiveAndDepthReducesHazardFrequency() {
+    fun sampledIntervalsStayWithinTheRequestedRange() {
         val fairness = ProceduralFairness()
         fairness.reset(11L)
 
-        val shallow = fairness.hazardInterval(1.4f, 2.6f, 0f, 1f)
-        val deep = fairness.hazardInterval(1.4f, 2.6f, 160f, 1f)
-
-        assertTrue(shallow > 0f)
-        assertTrue(deep > 0f)
-        assertTrue(deep < shallow)
-        assertTrue(fairness.pickupInterval(3f, 5.5f, 1f) > 0f)
+        repeat(200) {
+            val shallow = fairness.pickupInterval(3f, 5.5f, 1f)
+            assertTrue(shallow in 3f..5.5f)
+            assertTrue(fairness.range(0.4f, 1.6f) in 0.4f..1.6f)
+        }
     }
 
     @Test
@@ -310,8 +308,6 @@ class ProceduralFairnessTest {
             assertTrue(pickup - pickupWidth / 2f >= -0.0001f)
             assertTrue(pickup + pickupWidth / 2f <= 40f + 0.0001f)
             assertTrue(abs(pickup - playerX) <= 14f + 0.0001f)
-            assertTrue(fairness.hazardInterval(1.4f, 2.6f, depth, 1f) > 0f)
-
             playerX = fairness.range(1f, 39f)
         }
 

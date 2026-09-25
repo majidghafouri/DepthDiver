@@ -11,6 +11,32 @@ internal enum class GameState {
     GAME_OVER,
 }
 
+internal enum class BackAction {
+    EXIT,
+    PAUSE,
+    RESUME,
+    MAIN_MENU,
+}
+
+internal fun backActionFor(state: GameState): BackAction = when (state) {
+    GameState.MAIN_MENU -> BackAction.EXIT
+    GameState.PLAYING -> BackAction.PAUSE
+    GameState.PAUSED -> BackAction.RESUME
+    GameState.GAME_OVER,
+    GameState.PROFILE,
+    GameState.LEADERBOARD,
+    GameState.SHOP,
+    GameState.ACHIEVEMENTS,
+    -> BackAction.MAIN_MENU
+}
+
+internal fun backActionTarget(state: GameState): GameAction? = when (backActionFor(state)) {
+    BackAction.EXIT -> null
+    BackAction.PAUSE -> GameAction.Pause
+    BackAction.RESUME -> GameAction.Resume
+    BackAction.MAIN_MENU -> GameAction.MainMenu
+}
+
 internal sealed interface GameAction {
     data object StartRun : GameAction
     data object OpenProfile : GameAction

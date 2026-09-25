@@ -134,12 +134,6 @@ internal class ProceduralFairness(
         if (depthMeters.isFinite()) lastOxygenTankDepth = depthMeters
     }
 
-    fun hazardInterval(baseMinimum: Float, baseMaximum: Float, depthMeters: Float, difficultyMultiplier: Float): Float {
-        val depthFactor = (depthMeters / WORLD_WIDTH_METERS).coerceAtLeast(0f)
-        val ramp = 1f + depthFactor * 0.6f
-        return range(baseMinimum, baseMaximum) * difficultyMultiplier.coerceAtLeast(0f) / ramp
-    }
-
     fun pickupInterval(baseMinimum: Float, baseMaximum: Float, difficultyMultiplier: Float): Float =
         range(baseMinimum, baseMaximum) * difficultyMultiplier.coerceAtLeast(0f)
 

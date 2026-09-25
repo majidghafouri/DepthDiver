@@ -17,6 +17,7 @@
             android:name="app.deepdepthdiver.AndroidLauncher"
             android:exported="true"
             android:screenOrientation="sensorLandscape"
+            android:enableOnBackInvokedCallback="true"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
