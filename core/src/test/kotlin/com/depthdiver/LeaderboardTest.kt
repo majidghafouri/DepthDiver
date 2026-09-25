@@ -56,4 +56,37 @@ class LeaderboardTest {
         Leaderboard.submit(40, 7f)
         assertEquals(listOf(50, 40, 30), Leaderboard.top().map { it.score })
     }
+
+    @Test
+    fun equalSubmissionsShareTheirTrueRank() {
+        val first = Leaderboard.submitOnce("same-a", 50, 5f)
+        val second = Leaderboard.submitOnce("same-b", 50, 5f)
+
+        assertEquals(1, first.rank)
+        assertEquals(1, second.rank)
+    }
+
+    @Test
+    fun submitOnceReturnsOriginalOutcomeAfterEntryDropsOut() {
+        val original = Leaderboard.submitOnce("run-drop", 50, 5f)
+        assertTrue(original.entered)
+        assertEquals(1, original.rank)
+
+        Leaderboard.submit(60, 6f)
+        Leaderboard.submit(70, 7f)
+        Leaderboard.submit(80, 8f)
+        Leaderboard.submit(90, 9f)
+        Leaderboard.submit(100, 10f)
+        assertFalse(Leaderboard.top().any { it.score == 50 })
+
+        val duplicate = Leaderboard.submitOnce("run-drop", 1, 1f)
+        assertTrue(duplicate.entered)
+        assertEquals(1, duplicate.rank)
+        assertEquals(5, duplicate.size)
+        assertEquals(original.entered, duplicate.entered)
+        assertEquals(original.rank, duplicate.rank)
+        assertEquals(original.score, duplicate.score)
+        assertEquals(original.depth, duplicate.depth)
+        assertTrue(duplicate.duplicate)
+    }
 }

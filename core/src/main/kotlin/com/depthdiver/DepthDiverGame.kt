@@ -3,7 +3,6 @@ package com.depthdiver
 import com.badlogic.gdx.ApplicationAdapter
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
-import com.badlogic.gdx.Preferences
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.OrthographicCamera
@@ -18,6 +17,20 @@ import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
 import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
+import com.depthdiver.game.FixedStepClock
+import com.depthdiver.game.GameAction
+import com.depthdiver.game.GameFlow
+import com.depthdiver.game.GameState
+import com.depthdiver.game.INITIAL_PLAYER_X_METERS
+import com.depthdiver.game.INITIAL_PLAYER_Y_METERS
+import com.depthdiver.game.MoveDirection
+import com.depthdiver.game.PLAYER_RADIUS_METERS
+import com.depthdiver.game.WORLD_WIDTH_METERS
+import com.depthdiver.game.WorldViewSpec
+import com.depthdiver.run.BonusCategory
+import com.depthdiver.run.RunLedger
+import com.depthdiver.run.RunSettlement
+import com.depthdiver.run.RunTerminalReason
 import kotlin.math.max
 import kotlin.math.min
 
@@ -105,6 +118,27 @@ internal fun safeFrameDelta(delta: Float): Float = when {
     else -> min(delta, MAX_FRAME_DELTA)
 }
 
+internal fun inputDirection(
+    left: Boolean,
+    right: Boolean,
+    up: Boolean,
+    down: Boolean,
+): MoveDirection {
+    val x = when {
+        left && right -> 0f
+        left -> -1f
+        right -> 1f
+        else -> 0f
+    }
+    val y = when {
+        up && down -> 0f
+        up -> 1f
+        down -> -1f
+        else -> 0f
+    }
+    return MoveDirection(x, y).normalized()
+}
+
 internal enum class ShieldCollisionResult {
     ACTIVATED,
     BLOCKED,
@@ -144,7 +178,8 @@ internal fun gameOverActionAt(tx: Float, ty: Float, restart: TouchTarget, menu: 
 class DepthDiverGame : ApplicationAdapter() {
 
     private lateinit var batch: SpriteBatch
-    private lateinit var camera: OrthographicCamera
+    private val screenCamera = OrthographicCamera()
+    private val worldCamera = OrthographicCamera()
     private lateinit var font: BitmapFont
     private lateinit var titleFont: BitmapFont
     private lateinit var playerTex: Texture
@@ -160,7 +195,11 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private val hazards = mutableListOf<Hazard>()
     private val pickups = mutableListOf<Pickup>()
-    private var state: GameState = GameState.MAIN_MENU
+    private var flow = GameFlow()
+    private val state: GameState get() = flow.state
+    private val gameplayClock = FixedStepClock()
+    private val runSettlement = RunSettlement()
+    private var activeRun: RunLedger? = null
     private var frameDelta = 0f
     private var hudPauseCx = 0f
     private var hudPauseCy = 0f
@@ -169,7 +208,6 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private val audio = AudioManager()
 
-    private lateinit var prefs: Preferences
     private var bestDepth = 0f
     private var bestScore = 0
     private var leaderboardMade = false
@@ -182,9 +220,9 @@ class DepthDiverGame : ApplicationAdapter() {
     private var upgradeShieldLevel = 0
     private var upgradePearlValueLevel = 0
 
-    private var playerX = 0f
-    private var playerY = 0f
-    private var depth = 0f
+    private var playerX = INITIAL_PLAYER_X_METERS
+    private var playerY = INITIAL_PLAYER_Y_METERS
+    private var depth = -INITIAL_PLAYER_Y_METERS
     private var score = 0
     private var oxygen = 1f
     private var maxOxygen = 1f
@@ -199,6 +237,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private var shakeTimer = 0f
     private var shakeIntensity = 0f
+    private var shakeDuration = 0f
 
     private val particles = mutableListOf<Particle>()
 
@@ -209,20 +248,20 @@ class DepthDiverGame : ApplicationAdapter() {
     private var bossWarning = 0f
     private var lowOxyTick = 0f
 
-    private var playerSpeed = 320f
-    private val playerRadius = 18f
-    private val pixelsPerMeter = 20f
-    private var worldWidth = 800f
-    private var worldHeight = 600f
+    private var playerSpeed = 16f
+    private val playerRadius = PLAYER_RADIUS_METERS
+    private var screenWidth = 800f
+    private var screenHeight = 600f
+    private var worldViewSpec = WorldViewSpec(screenWidth, screenHeight)
+    private var worldCameraTarget = worldViewSpec.cameraFor(INITIAL_PLAYER_X_METERS, INITIAL_PLAYER_Y_METERS)
     private var menuFbo: FrameBuffer? = null
 
     override fun create() {
         batch = SpriteBatch()
-        camera = OrthographicCamera()
         resize(Gdx.graphics.width, Gdx.graphics.height)
         val generator = FreeTypeFontGenerator(Gdx.files.internal("fonts/OpenSans-Regular.ttf"))
         val parameter = FreeTypeFontGenerator.FreeTypeFontParameter().apply {
-            size = (worldHeight / 30f).toInt().coerceIn(16, 48)
+            size = (screenHeight / 30f).toInt().coerceIn(16, 48)
             color = Color.WHITE
             borderWidth = 1f
             borderColor = Color.BLACK
@@ -231,7 +270,7 @@ class DepthDiverGame : ApplicationAdapter() {
         font = generator.generateFont(parameter)
         titleFont = generator.generateFont(
             FreeTypeFontGenerator.FreeTypeFontParameter().apply {
-                size = (worldHeight / 9f).toInt().coerceIn(36, 84)
+                size = (screenHeight / 9f).toInt().coerceIn(36, 84)
                 color = Color(0.35f, 0.85f, 1f, 1f)
                 borderWidth = 2f
                 borderColor = Color(0.02f, 0.2f, 0.4f, 1f)
@@ -241,13 +280,7 @@ class DepthDiverGame : ApplicationAdapter() {
             }
         )
         generator.dispose()
-        prefs = Gdx.app.getPreferences("depthdiver")
-        bestDepth = prefs.getFloat("bestDepth", 0f)
-        bestScore = prefs.getInteger("bestScore", 0)
-        if (prefs.getBoolean("runSaved", false)) {
-            prefs.remove("runSaved")
-            prefs.flush()
-        }
+        refreshBests()
         refreshUpgradeLevels()
         applyUpgrades()
         audio.init()
@@ -361,18 +394,22 @@ class DepthDiverGame : ApplicationAdapter() {
         fishTex = Texture(fishPix)
         fishPix.dispose()
 
-        reset()
-        state = GameState.MAIN_MENU
+        resetWorld()
+        recoverStartupRuns()
     }
 
     override fun resize(width: Int, height: Int) {
-        worldWidth = width.toFloat()
-        worldHeight = height.toFloat()
-        camera.setToOrtho(false, worldWidth, worldHeight)
+        screenWidth = width.toFloat().coerceAtLeast(1f)
+        screenHeight = height.toFloat().coerceAtLeast(1f)
+        screenCamera.setToOrtho(false, screenWidth, screenHeight)
+        screenCamera.update()
+        worldViewSpec = WorldViewSpec(screenWidth, screenHeight)
+        worldCamera.setToOrtho(false, worldViewSpec.viewWidthMeters, worldViewSpec.viewHeightMeters)
+        updateWorldCamera()
     }
 
     override fun render() {
-        frameDelta = safeFrameDelta(Gdx.graphics.deltaTime)
+        frameDelta = gameplayClock.frameDeltaSeconds(Gdx.graphics.deltaTime)
         menuTime += frameDelta
         if (achievementToastTimer > 0f) {
             achievementToastTimer -= frameDelta
@@ -380,7 +417,12 @@ class DepthDiverGame : ApplicationAdapter() {
         }
         if (bossWarning > 0f) bossWarning -= frameDelta
         handleInput()
-        update(frameDelta)
+        if (state == GameState.PLAYING) {
+            gameplayClock.advance(frameDelta) { step ->
+                if (state == GameState.PLAYING) fixedUpdate(step)
+            }
+        }
+        if (state != GameState.PLAYING) gameplayClock.reset()
         draw()
     }
 
@@ -390,34 +432,45 @@ class DepthDiverGame : ApplicationAdapter() {
 
     override fun resume() {
         frameDelta = 0f
+        gameplayClock.reset()
     }
 
     private fun pauseGame() {
         if (state != GameState.PLAYING) return
-        state = GameState.PAUSED
+        try {
+            checkpointActiveRun()
+        } catch (_: Exception) {
+            return
+        }
+        if (!dispatch(GameAction.Pause)) return
+        gameplayClock.reset()
+        frameDelta = 0f
         stopShake()
     }
 
     private fun resumeGame() {
         if (state != GameState.PAUSED) return
-        state = GameState.PLAYING
+        if (!dispatch(GameAction.Resume)) return
+        gameplayClock.reset()
         frameDelta = 0f
     }
 
     private fun stopShake() {
         shakeTimer = 0f
         shakeIntensity = 0f
+        shakeDuration = 0f
     }
 
     private fun triggerShake(duration: Float, intensity: Float) {
-        shakeTimer = duration
-        shakeIntensity = intensity
+        shakeDuration = duration.coerceAtLeast(0f)
+        shakeTimer = shakeDuration
+        shakeIntensity = intensity.coerceAtLeast(0f)
     }
 
     private fun spawnParticles(x: Float, y: Float, color: Color, count: Int) {
         repeat(count) {
             val angle = MathUtils.random(MathUtils.PI2)
-            val speed = MathUtils.random(60f, 180f)
+            val speed = MathUtils.random(3f, 9f)
             val life = MathUtils.random(0.3f, 0.8f)
             particles.add(Particle(
                 x = x,
@@ -427,7 +480,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 life = life,
                 maxLife = life,
                 color = Color(color),
-                size = MathUtils.random(3f, 7f)
+                size = MathUtils.random(0.15f, 0.35f)
             ))
         }
     }
@@ -452,8 +505,8 @@ class DepthDiverGame : ApplicationAdapter() {
 
     /** One low-res render target used to fake a soft blur behind menu content. */
     private fun ensureMenuFbo() {
-        val wantW = (worldWidth / 4).toInt().coerceAtLeast(1)
-        val wantH = (worldHeight / 4).toInt().coerceAtLeast(1)
+        val wantW = (screenWidth / 4).toInt().coerceAtLeast(1)
+        val wantH = (screenHeight / 4).toInt().coerceAtLeast(1)
         val cur = menuFbo
         if (cur != null && cur.width == wantW && cur.height == wantH) return
         cur?.dispose()
@@ -462,16 +515,39 @@ class DepthDiverGame : ApplicationAdapter() {
         }
     }
 
-    private fun update(delta: Float) {
+    private fun fixedUpdate(delta: Float) {
         if (state != GameState.PLAYING) return
+        val ledger = activeRun ?: return
+        val keyboardDirection = inputDirection(
+            left = Gdx.input.isKeyPressed(Input.Keys.LEFT) || Gdx.input.isKeyPressed(Input.Keys.A),
+            right = Gdx.input.isKeyPressed(Input.Keys.RIGHT) || Gdx.input.isKeyPressed(Input.Keys.D),
+            up = Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W),
+            down = Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S),
+        )
+        val direction = if (!keyboardDirection.isZero) {
+            keyboardDirection
+        } else if (Gdx.input.isTouched()) {
+            worldViewSpec.touchDirection(
+                playerXMeters = playerX,
+                playerYMeters = playerY,
+                screenX = Gdx.input.x.toFloat(),
+                screenYFromTop = Gdx.input.y.toFloat(),
+                camera = worldCameraTarget,
+            )
+        } else {
+            MoveDirection.ZERO
+        }
+        playerX = (playerX + direction.x * playerSpeed * delta).coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
+        playerY = (playerY + direction.y * playerSpeed * delta).coerceAtMost(-playerRadius)
+        depth = max(0f, -playerY)
+        updateWorldCamera()
+
         elapsed += delta
         val diff = currentDifficulty()
         oxygen -= delta * diff.drain
-        depth = max(depth, (worldHeight - max(playerY, playerRadius)) / pixelsPerMeter)
         if (oxygen <= 0f) {
             oxygen = 0f
-            settleRunRecords()
-            endGame()
+            endGame(RunTerminalReason.OXYGEN)
             return
         }
 
@@ -497,12 +573,12 @@ class DepthDiverGame : ApplicationAdapter() {
             } else {
                 p.x += p.vx * delta
                 p.y += p.vy * delta
-                p.vy -= 200f * delta
+                p.vy -= 10f * delta
             }
         }
 
-        val depthFactor = (depth / 40f).coerceAtLeast(0f)
-        val scrollSpeed = diff.baseScroll + depthFactor * (40f * diff.ramp)
+        val depthFactor = (depth / WORLD_WIDTH_METERS).coerceAtLeast(0f)
+        val scrollSpeed = diff.baseScrollMeters + depthFactor * diff.rampMetersPerSecond
 
         hazardTimer -= delta
         if (hazardTimer <= 0) {
@@ -526,7 +602,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     shieldActive = true
                     shieldCooldown = shieldDuration(upgradeShieldLevel)
                     audio.playClick()
-                    triggerShake(0.15f, 8f)
+                    triggerShake(0.15f, 0.4f)
                     Gdx.input.vibrate(60)
                     spawnParticles(playerX, playerY, Color.MAGENTA, 15)
                     hazardIterator.remove()
@@ -536,11 +612,10 @@ class DepthDiverGame : ApplicationAdapter() {
                     hazardIterator.remove()
                 }
                 ShieldCollisionResult.FATAL -> {
-                    triggerShake(0.3f, 12f)
+                    triggerShake(0.3f, 0.6f)
                     Gdx.input.vibrate(100)
                     spawnParticles(playerX, playerY, Color.RED, 12)
-                    settleRunRecords()
-                    endGame()
+                    endGame(RunTerminalReason.HAZARD)
                     return
                 }
             }
@@ -552,7 +627,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     is Pickup.OxygenTank -> {
                         oxygen = (oxygen + 0.4f).coerceAtMost(maxOxygen)
                         audio.playOxygen()
-                        triggerShake(0.15f, 6f)
+                        triggerShake(0.15f, 0.3f)
                         Gdx.input.vibrate(40)
                         spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.CYAN, 8)
                     }
@@ -562,12 +637,11 @@ class DepthDiverGame : ApplicationAdapter() {
                         comboTimer = window
                         maxComboWindow = window
                         val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5)).toInt()
-                        score += pearlValue * combo
-                        runPearls += pearlValue
-                        Profile.addPearls(pearlValue)
-                        Profile.addLifetimePearls(pearlValue)
+                        ledger.collectPearl(pearlValue, pearlValue * combo)
+                        Profile.grantPearls(pearlValue)
+                        checkpointActiveRun()
                         audio.playPickup()
-                        triggerShake(0.1f, 4f)
+                        triggerShake(0.1f, 0.2f)
                         Gdx.input.vibrate(30)
                         spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.GOLD, 10)
                     }
@@ -590,8 +664,6 @@ class DepthDiverGame : ApplicationAdapter() {
             if (comboTimer <= 0f) combo = 1
         }
 
-        settleRunRecords()
-
         val earned = Achievements.checkAndEarn()
         if (earned != null) {
             achievementToast = earned
@@ -602,43 +674,37 @@ class DepthDiverGame : ApplicationAdapter() {
         while (depth >= nextMilestone) {
             val m = nextMilestone
             nextMilestone += 50f
-            runPearls += 10
-            Profile.addPearls(10)
-            Profile.addLifetimePearls(10)
-            achievementToast = "${Strings.t("milestone")} ${m.toInt()} M +10"
-            achievementToastTimer = 3f
-            audio.playAchieve()
+            if (awardRunBonus("milestone:$m", 10, BonusCategory.MILESTONE)) {
+                achievementToast = "${Strings.t("milestone")} ${m.toInt()} M +10"
+                achievementToastTimer = 3f
+                audio.playAchieve()
+            }
         }
 
         val activeCh = Challenge.activeFor(Profile.dailyDay())
         if (!Challenge.claimedFor(activeCh) && activeCh.met(depth, runPearls, score)) {
             Challenge.claim(activeCh)
-            val bonus = Challenge.REWARD
-            runPearls += bonus
-            Profile.addPearls(bonus)
-            Profile.addLifetimePearls(bonus)
-            achievementToast = "${Strings.t("challengeDone")} +$bonus"
-            achievementToastTimer = 3f
-            audio.playAchieve()
-        }
-
-        if (state == GameState.GAME_OVER) {
-            prefs.flush()
+            if (awardRunBonus("challenge:${activeCh.day}", Challenge.REWARD, BonusCategory.CHALLENGE)) {
+                achievementToast = "${Strings.t("challengeDone")} +${Challenge.REWARD}"
+                achievementToastTimer = 3f
+                audio.playAchieve()
+            }
         }
     }
 
     private fun updateEntities(delta: Float, scrollSpeed: Float) {
+        val visibleBottom = worldViewSpec.worldBottom(worldCameraTarget)
         val itr = hazards.iterator()
         while (itr.hasNext()) {
             val hazard = itr.next()
             when (hazard) {
                 is Hazard.Rock -> {
                     hazard.rect.y -= scrollSpeed * delta
-                    hazard.rect.x += MathUtils.sin(elapsed * 2f + hazard.phase) * 10f * delta
+                    hazard.rect.x += MathUtils.sin(elapsed * 2f + hazard.phase) * 0.5f * delta
                 }
                 is Hazard.Mine -> {
                     hazard.rect.y -= scrollSpeed * 0.6f * delta
-                    hazard.rect.x += MathUtils.sin(elapsed * 1.2f + hazard.phase) * 24f * delta
+                    hazard.rect.x += MathUtils.sin(elapsed * 1.2f + hazard.phase) * 1.2f * delta
                 }
                 is Hazard.Jellyfish -> {
                     hazard.rect.y -= scrollSpeed * 0.45f * delta
@@ -646,18 +712,18 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
                 is Hazard.Shark -> {
                     hazard.rect.y -= scrollSpeed * (if (hazard.isBoss) 0.15f else 0.5f) * delta
-                    hazard.rect.x += MathUtils.sin(elapsed * 0.8f + hazard.phase) * 14f * delta
+                    hazard.rect.x += MathUtils.sin(elapsed * 0.8f + hazard.phase) * 0.7f * delta
                 }
                 is Hazard.Eel -> {
-                    hazard.rect.x += 150f * hazard.dir * delta
-                    hazard.rect.y = hazard.baseY - scrollSpeed * (elapsed - hazard.spawn) * 0.35f + MathUtils.sin(elapsed * 2f + hazard.phase) * 8f
+                    hazard.rect.x += 7.5f * hazard.dir * delta
+                    hazard.rect.y = hazard.baseY - scrollSpeed * (elapsed - hazard.spawn) * 0.35f + MathUtils.sin(elapsed * 2f + hazard.phase) * 0.4f
                 }
             }
-            if (hazard.rect.y + hazard.rect.height < 0f ||
+            if (hazard.rect.y + hazard.rect.height < visibleBottom ||
                 hazard.rect.x + hazard.rect.width < 0f ||
-                hazard.rect.x > worldWidth
+                hazard.rect.x > WORLD_WIDTH_METERS
             ) {
-                if (hazard is Hazard.Shark && hazard.isBoss && hazard.rect.y + hazard.rect.height < 0f) {
+                if (hazard is Hazard.Shark && hazard.isBoss && hazard.rect.y + hazard.rect.height < visibleBottom) {
                     onBossEscaped()
                 }
                 itr.remove()
@@ -667,8 +733,12 @@ class DepthDiverGame : ApplicationAdapter() {
         while (itrP.hasNext()) {
             val pickup = itrP.next()
             pickup.rect.y -= scrollSpeed * 0.55f * delta
-            pickup.rect.x += MathUtils.sin(elapsed * 1.1f + pickup.phase) * 8f * delta
-            if (pickup.rect.y + pickup.rect.height < 0f || pickup.collected) {
+            pickup.rect.x += MathUtils.sin(elapsed * 1.1f + pickup.phase) * 0.4f * delta
+            if (pickup.rect.y + pickup.rect.height < visibleBottom ||
+                pickup.rect.x + pickup.rect.width < 0f ||
+                pickup.rect.x > WORLD_WIDTH_METERS ||
+                pickup.collected
+            ) {
                 itrP.remove()
             }
         }
@@ -676,19 +746,21 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun spawnHazard() {
         val roll = MathUtils.random()
-        val x = MathUtils.random(0f, (worldWidth - 80f).coerceAtLeast(0f))
+        val top = worldViewSpec.worldTop(worldCameraTarget)
+        val x = MathUtils.random(0f, (WORLD_WIDTH_METERS - 4f).coerceAtLeast(0f))
         when {
             roll < 0.3f -> {
-                hazards.add(Hazard.Rock(Rectangle(-24f, worldHeight + 40f, 96f, 120f), 0f))
-                hazards.add(Hazard.Rock(Rectangle(worldWidth - 72f, worldHeight + 40f, 96f, 120f), 0f))
+                hazards.add(Hazard.Rock(Rectangle(-1.2f, top + 2f, 4.8f, 6f), 0f))
+                hazards.add(Hazard.Rock(Rectangle(WORLD_WIDTH_METERS - 3.6f, top + 2f, 4.8f, 6f), 0f))
             }
             depth > 45f && roll < 0.45f -> {
                 val dir = if (MathUtils.random() < 0.5f) 1 else -1
-                val baseY = MathUtils.random(0.35f, 0.7f) * worldHeight
-                val startX = if (dir == 1) -170f else worldWidth + 10f
+                val width = 7.5f
+                val baseY = top + MathUtils.random(0.5f, 2.5f)
+                val startX = if (dir == 1) -width + 0.25f else WORLD_WIDTH_METERS - 0.25f
                 hazards.add(
                     Hazard.Eel(
-                        Rectangle(startX, baseY, 150f, 34f),
+                        Rectangle(startX, baseY, width, 1.7f),
                         dir,
                         MathUtils.random(0f, MathUtils.PI2),
                         baseY,
@@ -699,15 +771,15 @@ class DepthDiverGame : ApplicationAdapter() {
             depth > 35f && roll < 0.65f -> {
                 hazards.add(
                     Hazard.Jellyfish(
-                        Rectangle(x, worldHeight + 60f, 60f, 60f),
+                        Rectangle(x, top + 3f, 3f, 3f),
                         MathUtils.random(0f, MathUtils.PI2),
-                        MathUtils.random(25f, 45f),
+                        MathUtils.random(1.25f, 2.25f),
                         x
                     )
                 )
             }
             depth > 18f && roll < 0.85f -> {
-                hazards.add(Hazard.Mine(Rectangle(x, worldHeight + 48f, 48f, 48f), MathUtils.random(0f, MathUtils.PI2)))
+                hazards.add(Hazard.Mine(Rectangle(x, top + 2.4f, 2.4f, 2.4f), MathUtils.random(0f, MathUtils.PI2)))
             }
             depth > 80f && roll < 0.97f -> {
                 val boss = depth > 120f && MathUtils.random() < 0.06f
@@ -715,34 +787,35 @@ class DepthDiverGame : ApplicationAdapter() {
                     bossWarning = 2.5f
                     audio.playAlarm()
                 }
-                val w = if (boss) 130f else 84f
-                val h = if (boss) 46f else 30f
-                hazards.add(Hazard.Shark(Rectangle(x, worldHeight + 60f, w, h), 0f, boss))
+                val w = if (boss) 6.5f else 4.2f
+                val h = if (boss) 2.3f else 1.5f
+                hazards.add(Hazard.Shark(Rectangle(x, top + 3f, w, h), 0f, boss))
             }
             else -> {
-                val size = MathUtils.random(45f, 85f)
-                hazards.add(Hazard.Rock(Rectangle(x, worldHeight + 80f, size, size), MathUtils.random(0f, MathUtils.PI2)))
+                val size = MathUtils.random(2.25f, 4.25f)
+                hazards.add(Hazard.Rock(Rectangle(x, top + 4f, size, size), MathUtils.random(0f, MathUtils.PI2)))
             }
         }
     }
 
     private fun onBossEscaped() {
+        val ledger = activeRun ?: return
         val bonus = 50
-        runPearls += bonus
-        Profile.addPearls(bonus)
-        Profile.addLifetimePearls(bonus)
-        achievementToast = "${Strings.t("bossCleared")} +$bonus"
-        achievementToastTimer = 3f
-        audio.playAchieve()
+        if (awardRunBonus("boss:${ledger.runId}", bonus, BonusCategory.BOSS)) {
+            achievementToast = "${Strings.t("bossCleared")} +$bonus"
+            achievementToastTimer = 3f
+            audio.playAchieve()
+        }
     }
 
     private fun spawnPickup() {
-        val x = MathUtils.random(0f, (worldWidth - 40f).coerceAtLeast(0f))
+        val top = worldViewSpec.worldTop(worldCameraTarget)
+        val x = MathUtils.random(0f, (WORLD_WIDTH_METERS - 2f).coerceAtLeast(0f))
         val phase = MathUtils.random(0f, MathUtils.PI2)
         if (MathUtils.random() < 0.65f) {
-            pickups.add(Pickup.Pearl(Rectangle(x, worldHeight + 40f, 24f, 24f), phase))
+            pickups.add(Pickup.Pearl(Rectangle(x, top + 2f, 1.2f, 1.2f), phase))
         } else {
-            pickups.add(Pickup.OxygenTank(Rectangle(x, worldHeight + 48f, 32f, 32f), phase))
+            pickups.add(Pickup.OxygenTank(Rectangle(x, top + 2.4f, 1.6f, 1.6f), phase))
         }
     }
 
@@ -791,7 +864,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     return
                 }
                 if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
-                    reset()
+                    restartRun()
                     return
                 }
                 if (Gdx.input.justTouched() && Widgets.contains(touchX(), touchY(), hudPauseCx, hudPauseCy, hudPauseW, hudPauseH)) {
@@ -810,7 +883,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     return
                 }
                 if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
-                    reset()
+                    restartRun()
                     return
                 }
                 if (Gdx.input.justTouched()) {
@@ -825,13 +898,13 @@ class DepthDiverGame : ApplicationAdapter() {
                     return
                 }
                 if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
-                    reset()
+                    restartRun()
                     return
                 }
                 if (Gdx.input.justTouched()) {
                     val targets = gameOverTargets()
                     when (gameOverActionAt(touchX(), touchY(), targets.restart, targets.menu)) {
-                        GameOverAction.RESTART -> reset()
+                        GameOverAction.RESTART -> restartRun()
                         GameOverAction.MENU -> goToMenu()
                         GameOverAction.NONE -> Unit
                     }
@@ -839,34 +912,6 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
             }
         }
-
-        if (state != GameState.PLAYING) return
-
-        val delta = frameDelta
-        var dx = 0f
-        var dy = 0f
-        if (Gdx.input.isKeyPressed(Input.Keys.LEFT) || Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1f
-        if (Gdx.input.isKeyPressed(Input.Keys.RIGHT) || Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1f
-        if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1f
-        if (Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1f
-
-        if (dx != 0f || dy != 0f) {
-            val len = kotlin.math.sqrt(dx * dx + dy * dy)
-            dx /= len
-            dy /= len
-        } else if (Gdx.input.isTouched()) {
-            val touchX = Gdx.input.x.toFloat()
-            val touchY = Gdx.graphics.height.toFloat() - Gdx.input.y.toFloat()
-            val toX = touchX - playerX
-            val toY = touchY - playerY
-            val dist = kotlin.math.sqrt(toX * toX + toY * toY)
-            if (dist > playerRadius + 8f) {
-                dx = toX / dist
-                dy = toY / dist
-            }
-        }
-        playerX = (playerX + dx * playerSpeed * delta).coerceIn(playerRadius, worldWidth - playerRadius)
-        playerY = (playerY + dy * playerSpeed * delta).coerceIn(playerRadius, worldHeight - playerRadius)
     }
 
     private fun touchX(): Float = Gdx.input.x.toFloat()
@@ -891,11 +936,11 @@ class DepthDiverGame : ApplicationAdapter() {
     /** 2-column button grid used by the main menu. */
     private fun menuGridPos(i: Int): Pair<Float, Float> {
         val rows = (menuLabels().size + 1) / 2
-        val gap = min(72f, worldHeight * 0.115f)
-        val startY = worldHeight * 0.64f
+        val gap = min(72f, screenHeight * 0.115f)
+        val startY = screenHeight * 0.64f
         val row = i / 2
         val col = i % 2
-        val cx = worldWidth * (if (col == 0) 0.335f else 0.665f)
+        val cx = screenWidth * (if (col == 0) 0.335f else 0.665f)
         return cx to (startY - row * gap)
     }
 
@@ -903,12 +948,12 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun difficultySegs(): Array<FloatArray> {
         val w = max(196f, Widgets.pillW(font, Strings.t("normal")) + 10f)
         val h = Widgets.pillH(font, Strings.t("normal"))
-        val cy = worldHeight * 0.10f
+        val cy = screenHeight * 0.10f
         val gap = w + 18f
         return arrayOf(
-            floatArrayOf(worldWidth / 2f - gap, cy, w, h, 0f),
-            floatArrayOf(worldWidth / 2f, cy, w, h, 1f),
-            floatArrayOf(worldWidth / 2f + gap, cy, w, h, 2f)
+            floatArrayOf(screenWidth / 2f - gap, cy, w, h, 0f),
+            floatArrayOf(screenWidth / 2f, cy, w, h, 1f),
+            floatArrayOf(screenWidth / 2f + gap, cy, w, h, 2f)
         )
     }
 
@@ -936,10 +981,10 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun engage(index: Int) {
         audio.playClick()
         when (index) {
-            0 -> reset()
-            1 -> state = GameState.PROFILE
-            2 -> state = GameState.LEADERBOARD
-            3 -> state = GameState.SHOP
+            0 -> startRun()
+            1 -> dispatch(GameAction.OpenProfile)
+            2 -> dispatch(GameAction.OpenLeaderboard)
+            3 -> dispatch(GameAction.OpenShop)
             4 -> audio.toggleMute()
             5 -> Gdx.app.exit()
         }
@@ -953,14 +998,14 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun handleProfileTouch(tx: Float, ty: Float) {
-        val backPill = arrayOf(worldWidth * 0.2f, worldHeight * 0.08f)
+        val backPill = arrayOf(screenWidth * 0.2f, screenHeight * 0.08f)
         if (Widgets.contains(tx, ty, backPill[0], backPill[1], Widgets.pillW(font, Strings.t("back")), Widgets.pillH(font, Strings.t("back")))) {
             goToMenu()
             return
         }
         val achLabel = "${Strings.t("achievements")} ${Achievements.count()}/${Achievements.ALL.size}"
-        if (Widgets.contains(tx, ty, worldWidth * 0.8f, worldHeight * 0.08f, Widgets.pillW(font, achLabel), Widgets.pillH(font, achLabel))) {
-            state = GameState.ACHIEVEMENTS
+        if (Widgets.contains(tx, ty, screenWidth * 0.8f, screenHeight * 0.08f, Widgets.pillW(font, achLabel), Widgets.pillH(font, achLabel))) {
+            dispatch(GameAction.OpenAchievements)
             audio.playClick()
             return
         }
@@ -968,10 +1013,9 @@ class DepthDiverGame : ApplicationAdapter() {
         val active = Challenge.activeFor(day)
         if (!Challenge.claimedFor(active) && active.met(bestDepth, Profile.bestRunPearls(), bestScore)) {
             val label = "${Strings.t("claim")} +${Challenge.REWARD}"
-            if (Widgets.contains(tx, ty, worldWidth / 2f, profileClaimCy(), Widgets.pillW(font, label), Widgets.pillH(font, label))) {
+            if (Widgets.contains(tx, ty, screenWidth / 2f, profileClaimCy(), Widgets.pillW(font, label), Widgets.pillH(font, label))) {
                 Challenge.claim(active)
-                Profile.addPearls(Challenge.REWARD)
-                Profile.addLifetimePearls(Challenge.REWARD)
+                Profile.grantPearls(Challenge.REWARD)
                 achievementToast = "${Strings.t("claim")} +${Challenge.REWARD}"
                 achievementToastTimer = 2.5f
                 audio.playClick()
@@ -980,7 +1024,7 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun backPill(): ShopRect =
-        ShopRect(worldWidth / 2f, worldHeight * 0.08f, Widgets.pillW(font, Strings.t("back")), Widgets.pillH(font, Strings.t("back")))
+        ShopRect(screenWidth / 2f, screenHeight * 0.08f, Widgets.pillW(font, Strings.t("back")), Widgets.pillH(font, Strings.t("back")))
 
     private fun shopBuyLabel(u: Profile.Upgrade): String {
         val cost = Profile.upgradeCost(u)
@@ -991,12 +1035,12 @@ class DepthDiverGame : ApplicationAdapter() {
 
     /** Shared panel width for the sub-screens (profile/achievements/leaderboard/shop):
      *  wide enough that long stat/achievement names never collide with their values. */
-    private fun subPanelW(): Float = min(worldWidth * 0.86f, worldHeight * 1.6f).coerceAtMost(700f)
+    private fun subPanelW(): Float = min(screenWidth * 0.86f, screenHeight * 1.6f).coerceAtMost(700f)
 
     private fun shopPanel(): ShopRect {
         val panelW = subPanelW()
-        val panelH = worldHeight * 0.6f
-        return ShopRect(worldWidth / 2f, worldHeight / 2f, panelW, panelH)
+        val panelH = screenHeight * 0.6f
+        return ShopRect(screenWidth / 2f, screenHeight / 2f, panelW, panelH)
     }
 
     private fun shopHeaderCy(panel: ShopRect): Float =
@@ -1058,10 +1102,17 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun goToMenu() {
-        prefs.putBoolean("runSaved", false)
-        prefs.flush()
+        if (state == GameState.PLAYING || state == GameState.PAUSED) {
+            try {
+                abandonActiveRun()
+            } catch (_: Exception) {
+                return
+            }
+        }
+        dispatch(GameAction.MainMenu)
+        gameplayClock.reset()
+        frameDelta = 0f
         menuTime = 0f
-        state = GameState.MAIN_MENU
     }
 
     private data class GameOverBox(
@@ -1080,7 +1131,7 @@ class DepthDiverGame : ApplicationAdapter() {
     )
 
     private fun gameOverTargets(): GameOverTargets {
-        val centerX = worldWidth / 2f
+        val centerX = screenWidth / 2f
         val pillY = gameOverBox().pillY
         val restartLabel = Strings.t("restart")
         val menuLabel = Strings.t("menu")
@@ -1094,17 +1145,17 @@ class DepthDiverGame : ApplicationAdapter() {
      *  and text/buttons always clear each other. Badge/panel rows are stacked from the
      *  title downward with spacing that scales with the screen, never fixed offsets. */
     private fun gameOverBox(): GameOverBox {
-        val centerY = worldHeight / 2f
-        val tall = worldHeight >= 560f
+        val centerY = screenHeight / 2f
+        val tall = screenHeight >= 560f
         if (!tall) {
             return GameOverBox(centerY + 96f, Float.NaN, Float.NaN, 0f, 0f, 0f, centerY - 118f)
         }
-        val titleY = centerY + min(290f, worldHeight * 0.26f)
+        val titleY = centerY + min(290f, screenHeight * 0.26f)
         val showD = score > startBestScore
         val showT = leaderboardMade
         val recordY = if (showD) titleY - 50f else Float.NaN
         val top5Y = if (showT) titleY - (if (showD) 96f else 50f) else Float.NaN
-        val rowGap = min(44f, worldHeight / 22f)
+        val rowGap = min(44f, screenHeight / 22f)
         val contentH = rowGap * 4f + 58f
         var panelTop = titleY - 30f
         if (showD) panelTop -= 46f
@@ -1116,9 +1167,9 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun handlePauseTouch(tx: Float, ty: Float) {
         val labels = listOf(Strings.t("resume")) + listOf(Strings.t("menu"))
-        val centerX = worldWidth / 2f
-        val centerY = worldHeight / 2f
-        val tall = worldHeight >= 540f
+        val centerX = screenWidth / 2f
+        val centerY = screenHeight / 2f
+        val tall = screenHeight >= 540f
         val lineHeight = GlyphLayout(font, "Hg").height
         val r = pauseRows(tall, lineHeight)
         if (Widgets.contains(tx, ty, centerX, centerY + r.resume, Widgets.pillW(font, labels[0]), Widgets.pillH(font, labels[0]))) {
@@ -1127,7 +1178,7 @@ class DepthDiverGame : ApplicationAdapter() {
             return
         }
         if (Widgets.contains(tx, ty, centerX - 90f, centerY + r.side, Widgets.pillW(font, Strings.t("restart")), Widgets.pillH(font, Strings.t("restart")))) {
-            reset()
+            restartRun()
             audio.playClick()
             return
         }
@@ -1160,14 +1211,18 @@ class DepthDiverGame : ApplicationAdapter() {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
 
         val inGame = state == GameState.PLAYING || state == GameState.PAUSED || state == GameState.GAME_OVER
-
-        batch.projectionMatrix = camera.combined
-        batch.begin()
-
         if (inGame) {
+            updateWorldCamera()
+            batch.projectionMatrix = worldCamera.combined
+            batch.begin()
             if (state == GameState.PAUSED) drawWorldBlurred() else drawWorld()
+            screenCamera.update()
+            batch.projectionMatrix = screenCamera.combined
             drawHud()
         } else {
+            screenCamera.update()
+            batch.projectionMatrix = screenCamera.combined
+            batch.begin()
             when (state) {
                 GameState.MAIN_MENU -> drawMainMenu()
                 GameState.PROFILE -> {
@@ -1201,31 +1256,31 @@ class DepthDiverGame : ApplicationAdapter() {
         fbo.begin()
         Gdx.gl.glClearColor(0.02f, 0.12f, 0.25f, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-        batch.projectionMatrix = camera.combined
+        batch.projectionMatrix = worldCamera.combined
         batch.begin()
         drawWorld()
         batch.end()
         fbo.end()
-        batch.projectionMatrix = camera.combined
+        screenCamera.update()
+        batch.projectionMatrix = screenCamera.combined
         batch.begin()
         batch.setColor(1f, 1f, 1f, 0.9f)
-        batch.draw(fbo.colorBufferTexture, 0f, 0f, worldWidth, worldHeight)
+        batch.draw(fbo.colorBufferTexture, 0f, 0f, screenWidth, screenHeight)
         batch.setColor(0f, 0.03f, 0.10f, 0.28f)
-        batch.draw(uiPixel, 0f, 0f, worldWidth, worldHeight)
+        batch.draw(uiPixel, 0f, 0f, screenWidth, screenHeight)
         batch.setColor(Color.WHITE)
     }
 
     private fun drawWorld() {
         drawWorldBackground()
-        val originalCamX = camera.position.x
-        val originalCamY = camera.position.y
         if (state == GameState.PLAYING && shakeTimer > 0f) {
-            val progress = 1f - shakeTimer / 0.3f
+            val duration = shakeDuration.coerceAtLeast(0.0001f)
+            val progress = (1f - shakeTimer / duration).coerceIn(0f, 1f)
             val currentIntensity = shakeIntensity * (1f - progress * 0.7f)
-            camera.position.x += MathUtils.random(-currentIntensity, currentIntensity)
-            camera.position.y += MathUtils.random(-currentIntensity, currentIntensity)
-            camera.update()
-            batch.projectionMatrix = camera.combined
+            worldCamera.position.x += MathUtils.random(-currentIntensity, currentIntensity)
+            worldCamera.position.y += MathUtils.random(-currentIntensity, currentIntensity)
+            worldCamera.update()
+            batch.projectionMatrix = worldCamera.combined
         }
 
         batch.setColor(1f, 1f, 1f, 1f)
@@ -1267,15 +1322,14 @@ class DepthDiverGame : ApplicationAdapter() {
         )
 
         if (state == GameState.PLAYING && shakeTimer > 0f) {
-            camera.position.x = originalCamX
-            camera.position.y = originalCamY
-            camera.update()
-            batch.projectionMatrix = camera.combined
+            worldCamera.position.set(worldCameraTarget.xMeters, worldCameraTarget.yMeters, 0f)
+            worldCamera.update()
+            batch.projectionMatrix = worldCamera.combined
         }
     }
 
     private fun zoneAt(depth: Float): Int = when {
-        depth < 40f -> 0
+        depth < WORLD_WIDTH_METERS -> 0
         depth < 120f -> 1
         depth < 300f -> 2
         else -> 3
@@ -1297,8 +1351,8 @@ class DepthDiverGame : ApplicationAdapter() {
         )
         val z = zoneAt(depth)
         val p = when (z) {
-            0 -> (depth / 40f).coerceIn(0f, 1f)
-            1 -> ((depth - 40f) / 80f).coerceIn(0f, 1f)
+            0 -> (depth / WORLD_WIDTH_METERS).coerceIn(0f, 1f)
+            1 -> ((depth - WORLD_WIDTH_METERS) / (WORLD_WIDTH_METERS * 2f)).coerceIn(0f, 1f)
             2 -> ((depth - 120f) / 180f).coerceIn(0f, 1f)
             else -> 0f
         }
@@ -1312,8 +1366,15 @@ class DepthDiverGame : ApplicationAdapter() {
         val botG = lerp(4, 4)
         val botB = lerp(5, 5)
 
+        val visibleCamera = worldCameraTarget
+        val backgroundMargin = 1f
+        val left = worldViewSpec.worldLeft(visibleCamera) - backgroundMargin
+        val top = worldViewSpec.worldTop(visibleCamera) + backgroundMargin
+        val visibleWidth = worldViewSpec.viewWidthMeters + backgroundMargin * 2f
+        val visibleHeight = worldViewSpec.viewHeightMeters + backgroundMargin * 2f
+
         val bands = 16
-        val bandH = worldHeight / bands
+        val bandH = visibleHeight / bands
         for (i in 0 until bands) {
             val t = (i + 1f) / bands
             batch.setColor(
@@ -1322,59 +1383,69 @@ class DepthDiverGame : ApplicationAdapter() {
                 topB + (botB - topB) * t,
                 1f
             )
-            batch.draw(uiPixel, 0f, i * bandH - 1f, worldWidth, bandH + 2f)
+            batch.draw(uiPixel, left, top - (i + 1) * bandH - 0.1f, visibleWidth, bandH + 0.2f)
         }
 
         val streakCount = 5
         for (i in 0 until streakCount) {
-            val x = ((i * 31) % 100) / 100f * worldWidth
-            val speed = 26f + (i % 3) * 14f
-            val start = ((i * 47) % 100) / 100f * (worldHeight + 100f)
-            val y = (start + elapsed * speed) % (worldHeight + 100f) - 50f
+            val x = left + ((i * 31) % 100) / 100f * visibleWidth
+            val speed = 1.3f + (i % 3) * 0.7f
+            val span = visibleHeight + 5f
+            val start = ((i * 47) % 100) / 100f * span
+            val y = top - (start + elapsed * speed) % span - 2.5f
             batch.setColor(1f, 1f, 1f, 0.045f)
-            batch.draw(uiPixel, x - 70f, y - 1f, 140f, 2f)
+            batch.draw(uiPixel, x - 3.5f, y - 0.05f, 7f, 0.1f)
         }
 
         drawAmbientFish()
 
-        val surface = (1f - (depth / 40f)).coerceIn(0f, 1f)
+        val surface = (1f - (depth / WORLD_WIDTH_METERS)).coerceIn(0f, 1f)
         if (surface > 0.05f) {
             val rayCount = 4
             for (i in 0 until rayCount) {
-                val sway = MathUtils.sin(elapsed * 0.35f + i * 1.3f) * 14f
-                val baseX = worldWidth * (0.16f + i * 0.24f) + sway
-                val rayH = worldHeight * (0.16f + (i % 2) * 0.06f)
+                val sway = MathUtils.sin(elapsed * 0.35f + i * 1.3f) * 0.7f
+                val baseX = left + visibleWidth * (0.16f + i * 0.24f) + sway
+                val rayH = visibleHeight * (0.16f + (i % 2) * 0.06f)
                 val segments = 6
                 for (s in 0 until segments) {
-                    val t = (s + 1) / segments.toFloat()
-                    val alpha = 0.05f * surface * (1f - t * 0.85f)
-                    val w = 26f - t * 12f
+                    val startT = s / segments.toFloat()
+                    val endT = (s + 1) / segments.toFloat()
+                    val alpha = 0.05f * surface * (1f - endT * 0.85f)
+                    val w = 1.3f - endT * 0.6f
+                    val segmentH = rayH * (endT - startT) + 0.05f
                     batch.setColor(0.75f, 0.95f, 1f, alpha)
-                    batch.draw(uiPixel, baseX - w / 2f, worldHeight - rayH * t, w, rayH * (t - (s) / segments.toFloat()) + 1f)
+                    batch.draw(uiPixel, baseX - w / 2f, top - rayH * endT, w, segmentH)
                 }
             }
             batch.setColor(1f, 1f, 1f, 0.07f * surface)
-            batch.draw(uiPixel, 0f, worldHeight - 40f, worldWidth, 40f)
+            batch.draw(uiPixel, left, top - 2f, visibleWidth, 2f)
         }
         batch.setColor(1f, 1f, 1f, 1f)
     }
 
     private fun drawAmbientFish() {
+        val visibleCamera = worldCameraTarget
+        val left = worldViewSpec.worldLeft(visibleCamera)
+        val right = worldViewSpec.worldRight(visibleCamera)
+        val top = worldViewSpec.worldTop(visibleCamera)
+        val bottom = worldViewSpec.worldBottom(visibleCamera)
+        val visibleWidth = right - left
+        val visibleHeight = top - bottom
         val fishCount = 9
-        val scale = if (worldWidth >= 1200f) 1.15f else 0.9f
+        val scale = if (visibleWidth >= 60f) 1.15f else 0.9f
         for (i in 0 until fishCount) {
             val laneFrac = ((i * 29) % 100) / 100f
-            val baseY = worldHeight * (0.08f + laneFrac * 0.78f)
-            val speed = 20f + (i % 4) * 9f
-            val span = worldWidth + 180f
+            val baseY = bottom + visibleHeight * (0.08f + laneFrac * 0.78f)
+            val speed = 1f + (i % 4) * 0.45f
+            val span = visibleWidth + 9f
             val dir = if ((i % 2) == 0) 1 else -1
             val cx = if (dir == 1) {
-                (elapsed * speed % span) - 90f
+                left + (elapsed * speed % span) - 4.5f
             } else {
-                span - (elapsed * speed % span) - 90f
+                left + span - (elapsed * speed % span) - 4.5f
             }
-            val cy = baseY + MathUtils.sin(elapsed * 1.1f + i * 2.1f) * 7f
-            val size = (22f + (i % 3) * 7f) * scale
+            val cy = baseY + MathUtils.sin(elapsed * 1.1f + i * 2.1f) * 0.35f
+            val size = (1.1f + (i % 3) * 0.35f) * scale
             val alpha = 0.10f + (i % 3) * 0.05f
             batch.setColor(0.7f, 0.9f, 1f, alpha)
             if (dir == 1) {
@@ -1400,39 +1471,39 @@ class DepthDiverGame : ApplicationAdapter() {
         fbo.begin()
         Gdx.gl.glClearColor(0.02f, 0.12f, 0.25f, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-        batch.projectionMatrix = camera.combined
+        batch.projectionMatrix = screenCamera.combined
         batch.begin()
         drawMenuBackground()
         drawMenuVignette()
         batch.end()
         fbo.end()
-        batch.projectionMatrix = camera.combined
+        batch.projectionMatrix = screenCamera.combined
         batch.begin()
         batch.setColor(1f, 1f, 1f, 0.92f)
-        batch.draw(fbo.colorBufferTexture, 0f, 0f, worldWidth, worldHeight)
+        batch.draw(fbo.colorBufferTexture, 0f, 0f, screenWidth, screenHeight)
         batch.setColor(0f, 0.03f, 0.10f, 0.22f)
-        batch.draw(uiPixel, 0f, 0f, worldWidth, worldHeight)
+        batch.draw(uiPixel, 0f, 0f, screenWidth, screenHeight)
         batch.setColor(Color.WHITE)
     }
 
     private fun drawMenuContent() {
         val pulse = 0.5f + 0.5f * MathUtils.sin(menuTime * 1.8f)
-        val titleY = worldHeight * 0.86f
+        val titleY = screenHeight * 0.86f
         titleFont.color = Color(0.12f, 0.5f, 0.95f, 0.22f + 0.15f * pulse)
         for (off in floatArrayOf(-3f, 3f)) {
-            Widgets.text(batch, titleFont, Strings.t("menuTitle"), worldWidth / 2f + off, titleY)
+            Widgets.text(batch, titleFont, Strings.t("menuTitle"), screenWidth / 2f + off, titleY)
         }
         titleFont.color = Color(0.4f + 0.5f * pulse, 0.87f, 1f, 1f)
-        Widgets.text(batch, titleFont, Strings.t("menuTitle"), worldWidth / 2f, titleY)
+        Widgets.text(batch, titleFont, Strings.t("menuTitle"), screenWidth / 2f, titleY)
         titleFont.color = Color(0.35f, 0.85f, 1f, 1f)
         batch.setColor(0.2f, 0.78f, 1f, 0.55f)
-        batch.draw(uiPixel, worldWidth / 2f - 170f, titleY - 26f, 340f, 4f)
-        batch.draw(uiPixel, worldWidth / 2f - 110f, titleY - 35f, 220f, 3f)
+        batch.draw(uiPixel, screenWidth / 2f - 170f, titleY - 26f, 340f, 4f)
+        batch.draw(uiPixel, screenWidth / 2f - 110f, titleY - 35f, 220f, 3f)
         batch.setColor(Color.WHITE)
 
-        if (worldHeight >= 520f) {
+        if (screenHeight >= 520f) {
             font.color = Color.CYAN
-            Widgets.text(batch, font, Strings.t("menuSubtitle"), worldWidth / 2f, worldHeight * 0.74f)
+            Widgets.text(batch, font, Strings.t("menuSubtitle"), screenWidth / 2f, screenHeight * 0.74f)
         }
         font.color = Color.WHITE
         val labels = menuLabels()
@@ -1443,7 +1514,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
         val segs = difficultySegs()
         font.color = Color(0.5f, 0.8f, 1f, 0.85f)
-        Widgets.text(batch, font, Strings.t("difficulty"), worldWidth / 2f, segs[0][1] + segs[0][3] / 2f + 18f)
+        Widgets.text(batch, font, Strings.t("difficulty"), screenWidth / 2f, segs[0][1] + segs[0][3] / 2f + 18f)
         font.color = Color.WHITE
         val current = Profile.difficulty()
         val names = listOf("easy", "normal", "hard")
@@ -1463,12 +1534,12 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun drawMenuVignette() {
-        val edge = worldHeight * 0.06f
+        val edge = screenHeight * 0.06f
         batch.setColor(0f, 0.03f, 0.09f, 0.40f)
-        batch.draw(uiPixel, 0f, worldHeight - edge, worldWidth, edge)
-        batch.draw(uiPixel, 0f, 0f, worldWidth, edge)
-        batch.draw(uiPixel, 0f, edge, edge, worldHeight - 2f * edge)
-        batch.draw(uiPixel, worldWidth - edge, edge, edge, worldHeight - 2f * edge)
+        batch.draw(uiPixel, 0f, screenHeight - edge, screenWidth, edge)
+        batch.draw(uiPixel, 0f, 0f, screenWidth, edge)
+        batch.draw(uiPixel, 0f, edge, edge, screenHeight - 2f * edge)
+        batch.draw(uiPixel, screenWidth - edge, edge, edge, screenHeight - 2f * edge)
         batch.setColor(Color.WHITE)
     }
 
@@ -1476,37 +1547,37 @@ class DepthDiverGame : ApplicationAdapter() {
         val bubbleCount = 26
         for (i in 0 until bubbleCount) {
             val xFrac = (i * 37 % 100) / 100f
-            val x = xFrac * worldWidth
+            val x = xFrac * screenWidth
             val speed = 20f + (i % 5) * 9f
             val size = 4f + (i % 4) * 3f
-            val start = (i * 53 % 100) / 100f * (worldHeight + 80f)
-            val y = (start + menuTime * speed) % (worldHeight + 80f) - 40f
+            val start = (i * 53 % 100) / 100f * (screenHeight + 80f)
+            val y = (start + menuTime * speed) % (screenHeight + 80f) - 40f
             val alpha = 0.10f + (i % 3) * 0.05f
             batch.setColor(0.55f, 0.85f, 1f, alpha)
             batch.draw(uiPixel, x - size / 2f, y - size / 2f, size, size)
         }
-        val dSize = playerRadius * 2f * 1.8f
-        val dx = worldWidth * 0.5f + MathUtils.sin(menuTime * 0.5f) * worldWidth * 0.16f
-        val dy = worldHeight * 0.585f + MathUtils.sin(menuTime * 1.1f) * 12f
+        val dSize = min(screenWidth, screenHeight) * 0.108f
+        val dx = screenWidth * 0.5f + MathUtils.sin(menuTime * 0.5f) * screenWidth * 0.16f
+        val dy = screenHeight * 0.585f + MathUtils.sin(menuTime * 1.1f) * 12f
         batch.draw(playerTex, dx - dSize / 2f, dy - dSize / 2f, dSize, dSize)
         batch.setColor(1f, 1f, 1f, 1f)
     }
 
     private fun drawSubScreenHeader(title: String) {
-        Widgets.text(batch, titleFont, title, worldWidth / 2f, worldHeight * 0.84f)
+        Widgets.text(batch, titleFont, title, screenWidth / 2f, screenHeight * 0.84f)
         val pill = backPill()
         Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, Strings.t("back"))
     }
 
     private fun drawProfileScreen() {
-        Widgets.text(batch, titleFont, Strings.t("profile"), worldWidth / 2f, worldHeight * 0.84f)
-        Widgets.pill(batch, font, uiPixel, worldWidth * 0.2f, worldHeight * 0.08f, Strings.t("back"))
+        Widgets.text(batch, titleFont, Strings.t("profile"), screenWidth / 2f, screenHeight * 0.84f)
+        Widgets.pill(batch, font, uiPixel, screenWidth * 0.2f, screenHeight * 0.08f, Strings.t("back"))
         val achLabel = "${Strings.t("achievements")} ${Achievements.count()}/${Achievements.ALL.size}"
-        Widgets.pill(batch, font, uiPixel, worldWidth * 0.8f, worldHeight * 0.08f, achLabel)
-        val panelCx = worldWidth / 2f
-        val panelCy = worldHeight / 2f
+        Widgets.pill(batch, font, uiPixel, screenWidth * 0.8f, screenHeight * 0.08f, achLabel)
+        val panelCx = screenWidth / 2f
+        val panelCy = screenHeight / 2f
         val panelW = subPanelW()
-        val panelH = worldHeight * 0.58f
+        val panelH = screenHeight * 0.58f
         Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
 
         val stats = listOf(
@@ -1557,14 +1628,14 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     /** Claim button for the daily challenge on the profile screen. */
-    private fun profileClaimCy(): Float = worldHeight / 2f - 168f
+    private fun profileClaimCy(): Float = screenHeight / 2f - 168f
 
     private fun drawAchievementsScreen() {
         drawSubScreenHeader(Strings.t("achievements"))
-        val panelCx = worldWidth / 2f
-        val panelCy = worldHeight / 2f
+        val panelCx = screenWidth / 2f
+        val panelCy = screenHeight / 2f
         val panelW = subPanelW()
-        val panelH = worldHeight * 0.52f
+        val panelH = screenHeight * 0.52f
         Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
 
         if (Achievements.count() == Achievements.ALL.size) {
@@ -1593,10 +1664,10 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun drawLeaderboardScreen() {
         drawSubScreenHeader(Strings.t("leaderboard"))
-        val panelCx = worldWidth / 2f
-        val panelCy = worldHeight / 2f
+        val panelCx = screenWidth / 2f
+        val panelCy = screenHeight / 2f
         val panelW = subPanelW()
-        val panelH = worldHeight * 0.56f
+        val panelH = screenHeight * 0.56f
         Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
 
         val entries = Leaderboard.top()
@@ -1658,11 +1729,11 @@ class DepthDiverGame : ApplicationAdapter() {
         val lineSpacing = 8f
         val colGap = 22f
 
-        var y = worldHeight - lineHeight - padding
+        var y = screenHeight - lineHeight - padding
 
         font.color = Color(0.6f, 0.85f, 1f, 0.9f)
         glyphLayout.setText(font, Strings.t(zoneKey(zoneAt(depth))))
-        font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, y)
+        font.draw(batch, glyphLayout, screenWidth / 2f - glyphLayout.width / 2f, y)
         font.color = Color.WHITE
 
         val depthStr = "${Strings.t("depth")}: ${depth.toInt()} m"
@@ -1677,13 +1748,13 @@ class DepthDiverGame : ApplicationAdapter() {
 
         font.color = Color.CYAN
         glyphLayout.setText(font, difficultyLabel())
-        font.draw(batch, glyphLayout, worldWidth - 10f - glyphLayout.width, y)
+        font.draw(batch, glyphLayout, screenWidth - 10f - glyphLayout.width, y)
         font.color = Color.WHITE
 
         if (bossWarning > 0f) {
             font.color = Color(1f, 0.35f, 0.3f, 1f)
             glyphLayout.setText(font, Strings.t("leviathan"))
-            font.draw(batch, glyphLayout, worldWidth / 2f - glyphLayout.width / 2f, y - lineHeight * 1.4f)
+            font.draw(batch, glyphLayout, screenWidth / 2f - glyphLayout.width / 2f, y - lineHeight * 1.4f)
             font.color = Color.WHITE
         }
 
@@ -1697,7 +1768,7 @@ class DepthDiverGame : ApplicationAdapter() {
             val pl = Strings.t("pause")
             val plW = Widgets.pillW(font, pl)
             val plH = Widgets.pillH(font, pl)
-            val plCX = worldWidth - 12f - plW / 2f
+            val plCX = screenWidth - 12f - plW / 2f
             val plCY = y
             val (w, h) = Widgets.pill(batch, font, uiPixel, plCX, plCY, pl)
             hudPauseW = w
@@ -1705,9 +1776,9 @@ class DepthDiverGame : ApplicationAdapter() {
             hudPauseCx = plCX
             hudPauseCy = plCY
         } else {
-            hudPauseW = worldWidth * 0.1f
-            hudPauseH = worldHeight * 0.05f
-            hudPauseCx = worldWidth - 12f - hudPauseW / 2f
+            hudPauseW = screenWidth * 0.1f
+            hudPauseH = screenHeight * 0.05f
+            hudPauseCx = screenWidth - 12f - hudPauseW / 2f
             hudPauseCy = y
         }
 
@@ -1740,16 +1811,16 @@ class DepthDiverGame : ApplicationAdapter() {
             val alpha = 0.15f * danger * (0.65f + 0.35f * ((MathUtils.sin(elapsed * 5f) + 1f) / 2f))
             val edge = 26f
             batch.setColor(1f, 0.1f, 0.08f, alpha)
-            batch.draw(uiPixel, 0f, worldHeight - edge, worldWidth, edge)
-            batch.draw(uiPixel, 0f, 0f, worldWidth, edge)
-            batch.draw(uiPixel, 0f, edge, edge, worldHeight - 2f * edge)
-            batch.draw(uiPixel, worldWidth - edge, edge, edge, worldHeight - 2f * edge)
+            batch.draw(uiPixel, 0f, screenHeight - edge, screenWidth, edge)
+            batch.draw(uiPixel, 0f, 0f, screenWidth, edge)
+            batch.draw(uiPixel, 0f, edge, edge, screenHeight - 2f * edge)
+            batch.draw(uiPixel, screenWidth - edge, edge, edge, screenHeight - 2f * edge)
             batch.setColor(1f, 1f, 1f, 1f)
         }
         if (state == GameState.GAME_OVER) {
-            val centerX = worldWidth / 2f
+            val centerX = screenWidth / 2f
             val box = gameOverBox()
-            val tall = worldHeight >= 560f
+            val tall = screenHeight >= 560f
 
             font.color = Color.RED
             val gameOverStr = "${Strings.t("gameOver")} - ${Strings.t("pressR")}"
@@ -1770,10 +1841,10 @@ class DepthDiverGame : ApplicationAdapter() {
 
                 val panelCx = centerX
                 val panelCy = (box.panelTop + box.panelBottom) / 2f
-                val panelW = min(worldWidth * 0.75f, 460f)
+                val panelW = min(screenWidth * 0.75f, 460f)
                 Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, box.panelH)
 
-                val rowGap = min(44f, worldHeight / 22f)
+                val rowGap = min(44f, screenHeight / 22f)
                 val rows = listOf(
                     Pair(Strings.t("reachedDepth"), "${depth.toInt()} m"),
                     Pair(Strings.t("score"), "$score"),
@@ -1792,7 +1863,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
                 font.color = Color.WHITE
             } else {
-                val centerY = worldHeight / 2f
+                val centerY = screenHeight / 2f
                 font.color = Color.GOLD
                 val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
                 glyphLayout.setText(font, bestStr)
@@ -1822,9 +1893,9 @@ class DepthDiverGame : ApplicationAdapter() {
         val layout = GlyphLayout(font, s)
         val w = layout.width + 48f
         val h = layout.height + 26f
-        Widgets.panel(batch, uiPixel, worldWidth / 2f, worldHeight - 56f, w, h)
+        Widgets.panel(batch, uiPixel, screenWidth / 2f, screenHeight - 56f, w, h)
         font.color = Color.GOLD
-        Widgets.text(batch, font, s, worldWidth / 2f, worldHeight - 56f)
+        Widgets.text(batch, font, s, screenWidth / 2f, screenHeight - 56f)
         font.color = Color.WHITE
     }
 
@@ -1851,14 +1922,14 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun drawPauseOverlay(glyphLayout: GlyphLayout, lineHeight: Float) {
-        val centerX = worldWidth / 2f
-        val centerY = worldHeight / 2f
-        val tall = worldHeight >= 540f
+        val centerX = screenWidth / 2f
+        val centerY = screenHeight / 2f
+        val tall = screenHeight >= 540f
         val r = pauseRows(tall, lineHeight)
         val s = pauseSpacing(lineHeight)
         val panelH = if (tall) 8.8f * s else 6.1f * s
 
-        Widgets.panel(batch, uiPixel, centerX, centerY, worldWidth * 0.76f, panelH)
+        Widgets.panel(batch, uiPixel, centerX, centerY, screenWidth * 0.76f, panelH)
 
         font.color = Color.CYAN
         val pausedStr = Strings.t("paused")
@@ -1900,51 +1971,139 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun playerRect() =
         Rectangle(playerX - playerRadius, playerY - playerRadius, playerRadius * 2f, playerRadius * 2f)
 
-    private fun settleRunRecords() {
-        if (depth > bestDepth) {
-            bestDepth = depth
-            prefs.putFloat("bestDepth", bestDepth)
-        }
-        if (score > bestScore) {
-            bestScore = score
-            prefs.putInteger("bestScore", bestScore)
-        }
+    private fun updateWorldCamera() {
+        worldCameraTarget = worldViewSpec.cameraFor(playerX, playerY)
+        worldCamera.position.set(worldCameraTarget.xMeters, worldCameraTarget.yMeters, 0f)
+        worldCamera.update()
     }
 
-    private fun endGame() {
-        if (state == GameState.PLAYING) {
-            state = GameState.GAME_OVER
-            leaderboardMade = Leaderboard.qualifies(score, depth)
-            Leaderboard.submit(score, depth)
-            Profile.recordDive()
-            Profile.noteRun(runPearls)
-            val day = Profile.dailyDay()
-            if (Profile.claimedDailyDay() != day) {
-                Profile.claimDaily(day)
-                val bonus = 25
-                runPearls += bonus
-                Profile.addPearls(bonus)
-                Profile.addLifetimePearls(bonus)
-                achievementToast = "${Strings.t("dailyBonus")} +$bonus"
-                achievementToastTimer = 3f
+    private fun dispatch(action: GameAction): Boolean {
+        if (!flow.accepts(action)) return false
+        flow = flow.reduce(action)
+        return true
+    }
+
+    private fun refreshBests() {
+        bestDepth = Profile.bestDepth()
+        bestScore = Profile.bestScore()
+    }
+
+    private fun recoverStartupRuns() {
+        try {
+            val recovered = runSettlement.recoverPending()
+            if (recovered != null) refreshBests()
+            val active = runSettlement.active()
+            if (active != null) {
+                runSettlement.abandon(active)
+                activeRun = null
+                refreshBests()
             }
-            audio.playCrash()
-            prefs.flush()
+        } catch (_: Exception) {
+            activeRun = null
         }
+        refreshBests()
+    }
+
+    private fun startRun() {
+        if (!flow.accepts(GameAction.StartRun)) return
+        val ledger = try {
+            runSettlement.begin(initialWalletPearls = Profile.pearls())
+        } catch (_: Exception) {
+            return
+        }
+        resetWorld()
+        startBestScore = Profile.bestScore()
+        activeRun = ledger
+        dispatch(GameAction.StartRun)
+    }
+
+    private fun restartRun() {
+        if (!flow.accepts(GameAction.Restart)) return
+        if (state == GameState.PLAYING || state == GameState.PAUSED) {
+            try {
+                abandonActiveRun()
+            } catch (_: Exception) {
+                return
+            }
+        }
+        val ledger = try {
+            runSettlement.begin(initialWalletPearls = Profile.pearls())
+        } catch (_: Exception) {
+            return
+        }
+        resetWorld()
+        startBestScore = Profile.bestScore()
+        activeRun = ledger
+        dispatch(GameAction.Restart)
+    }
+
+    private fun abandonActiveRun() {
+        val ledger = activeRun ?: return
+        checkpointActiveRun()
+        val result = runSettlement.abandon(ledger)
+        activeRun = null
+        depth = result.depth
+        score = result.score
+        runPearls = result.displayedPearls
+        leaderboardMade = false
+        refreshBests()
+    }
+
+    private fun checkpointActiveRun() {
+        val ledger = activeRun ?: return
+        runSettlement.checkpoint(ledger, depth, score)
+        syncRunMirror()
+    }
+
+    private fun syncRunMirror() {
+        val ledger = activeRun ?: return
+        score = ledger.score
+        runPearls = ledger.displayedPearls
+    }
+
+    private fun awardRunBonus(key: String, pearls: Int, category: BonusCategory): Boolean {
+        val ledger = activeRun ?: return false
+        val awarded = ledger.awardBonus(key, pearls, category)
+        if (awarded <= 0) return false
+        Profile.grantPearls(awarded)
+        checkpointActiveRun()
+        return true
+    }
+
+    private fun endGame(reason: RunTerminalReason) {
+        if (state != GameState.PLAYING) return
+        val ledger = activeRun ?: return
+        val result = try {
+            checkpointActiveRun()
+            runSettlement.settle(ledger, reason)
+        } catch (_: Exception) {
+            dispatch(GameAction.Pause)
+            return
+        }
+        activeRun = null
+        depth = result.depth
+        score = result.score
+        runPearls = result.displayedPearls
+        leaderboardMade = result.leaderboardEntered == true
+        refreshBests()
+        check(dispatch(GameAction.EndRun))
+        audio.playCrash()
     }
 
     private fun applyUpgrades() {
         maxOxygen = 1f + upgradeOxygenLevel * 0.15f
-        playerSpeed = 320f * (1f + upgradeSpeedLevel * 0.08f)
+        playerSpeed = 16f * (1f + upgradeSpeedLevel * 0.08f)
     }
 
-    private fun reset() {
+    private fun resetWorld() {
+        activeRun = null
+        gameplayClock.reset()
         frameDelta = 0f
-        playerX = worldWidth / 2f
-        playerY = worldHeight * 0.25f
-        depth = 0f
+        playerX = INITIAL_PLAYER_X_METERS
+        playerY = INITIAL_PLAYER_Y_METERS
+        depth = max(0f, -playerY)
+        updateWorldCamera()
         score = 0
-        startBestScore = bestScore
         leaderboardMade = false
         applyUpgrades()
         oxygen = maxOxygen
@@ -1962,14 +2121,17 @@ class DepthDiverGame : ApplicationAdapter() {
         pickups.clear()
         particles.clear()
         stopShake()
-        state = GameState.PLAYING
     }
 
-    private enum class GameState { MAIN_MENU, PLAYING, PAUSED, GAME_OVER, PROFILE, LEADERBOARD, SHOP, ACHIEVEMENTS }
-
-private enum class Difficulty(val drain: Float, val baseScroll: Float, val ramp: Float, val spawnMul: Float, val pickupMul: Float) {
-    EASY(0.014f, 78f, 0.8f, 1.3f, 1.2f),
-    NORMAL(0.02f, 90f, 1f, 1f, 1f),
-    HARD(0.028f, 110f, 1.25f, 0.75f, 0.85f)
+private enum class Difficulty(
+    val drain: Float,
+    val baseScrollMeters: Float,
+    val rampMetersPerSecond: Float,
+    val spawnMul: Float,
+    val pickupMul: Float,
+) {
+    EASY(0.014f, 3.9f, 1.6f, 1.3f, 1.2f),
+    NORMAL(0.02f, 4.5f, 2f, 1f, 1f),
+    HARD(0.028f, 5.5f, 2.5f, 0.75f, 0.85f)
 }
 }

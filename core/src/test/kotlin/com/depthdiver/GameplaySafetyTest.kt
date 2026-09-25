@@ -1,5 +1,6 @@
 package com.depthdiver
 
+import com.depthdiver.game.MoveDirection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,6 +15,20 @@ class GameplaySafetyTest {
         assertEquals(0f, safeFrameDelta(-1f))
         assertEquals(0f, safeFrameDelta(Float.NaN))
         assertEquals(0f, safeFrameDelta(Float.POSITIVE_INFINITY))
+    }
+
+    @Test
+    fun inputDirectionNormalizesKeyboardInput() {
+        val keyboard = inputDirection(
+            left = true,
+            right = false,
+            up = true,
+            down = false,
+        )
+        assertEquals(-0.70710677f, keyboard.x, 0.000001f)
+        assertEquals(0.70710677f, keyboard.y, 0.000001f)
+        assertEquals(1f, keyboard.length, 0.000001f)
+        assertEquals(MoveDirection.ZERO, inputDirection(left = false, right = false, up = false, down = false))
     }
 
     @Test
