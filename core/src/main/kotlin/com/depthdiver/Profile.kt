@@ -290,14 +290,68 @@ object Profile {
         p.flush()
     }
 
-    // ---------- settings ----------
-
+// ---------- settings ----------
+    
     /** 0 = EASY, 1 = NORMAL, 2 = HARD. */
     fun difficulty(): Int = prefs().getInteger("difficulty", 1)
-
+    
     fun setDifficulty(index: Int) {
         val p = prefs()
         p.putInteger("difficulty", index)
+        p.flush()
+    }
+    
+    /** Master volume [0..1]. */
+    fun masterVolume(): Float = prefs().getFloat("masterVolume", 1f)
+    
+    fun setMasterVolume(v: Float) {
+        val p = prefs()
+        p.putFloat("masterVolume", v.coerceIn(0f, 1f))
+        p.flush()
+    }
+    
+    /** SFX volume [0..1]. */
+    fun sfxVolume(): Float = prefs().getFloat("sfxVolume", 1f)
+    
+    fun setSfxVolume(v: Float) {
+        val p = prefs()
+        p.putFloat("sfxVolume", v.coerceIn(0f, 1f))
+        p.flush()
+    }
+    
+    /** Music/ambience volume [0..1]. */
+    fun musicVolume(): Float = prefs().getFloat("musicVolume", 1f)
+    
+    fun setMusicVolume(v: Float) {
+        val p = prefs()
+        p.putFloat("musicVolume", v.coerceIn(0f, 1f))
+        p.flush()
+    }
+    
+    /** Reduce motion: disable screen shake, particles, vignette pulse. */
+    fun reduceMotion(): Boolean = prefs().getBoolean("reduceMotion", false)
+    
+    fun setReduceMotion(enabled: Boolean) {
+        val p = prefs()
+        p.putBoolean("reduceMotion", enabled)
+        p.flush()
+    }
+    
+    /** High contrast mode for accessibility. */
+    fun highContrast(): Boolean = prefs().getBoolean("highContrast", false)
+    
+    fun setHighContrast(enabled: Boolean) {
+        val p = prefs()
+        p.putBoolean("highContrast", enabled)
+        p.flush()
+    }
+    
+    /** Screen shake toggle (independent of reduceMotion for fine-grained control). */
+    fun screenShakeEnabled(): Boolean = prefs().getBoolean("screenShake", true)
+    
+    fun setScreenShakeEnabled(enabled: Boolean) {
+        val p = prefs()
+        p.putBoolean("screenShake", enabled)
         p.flush()
     }
 

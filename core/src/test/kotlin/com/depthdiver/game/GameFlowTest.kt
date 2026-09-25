@@ -15,6 +15,7 @@ class GameFlowTest {
             GameAction.OpenProfile to GameState.PROFILE,
             GameAction.OpenLeaderboard to GameState.LEADERBOARD,
             GameAction.OpenShop to GameState.SHOP,
+            GameAction.OpenSettings to GameState.SETTINGS,
         ),
         GameState.PROFILE to mapOf(
             GameAction.OpenAchievements to GameState.ACHIEVEMENTS,
@@ -23,6 +24,7 @@ class GameFlowTest {
         GameState.LEADERBOARD to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.SHOP to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.ACHIEVEMENTS to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
+        GameState.SETTINGS to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.PLAYING to mapOf(
             GameAction.Pause to GameState.PAUSED,
             GameAction.Restart to GameState.PLAYING,
@@ -139,8 +141,8 @@ class GameFlowTest {
         }
     }
 
-    @Test
-    fun onlyTheThreeRunStatesDrawTheWorld() {
+    @SafeVarargs
+    private fun onlyTheThreeRunStatesDrawTheWorld() {
         for (state in GameState.values()) {
             assertEquals(state in WORLD_STATES, GameFlow(state).inWorld, state.name)
         }

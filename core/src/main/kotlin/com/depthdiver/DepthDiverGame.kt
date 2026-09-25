@@ -890,7 +890,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
             }
 
-            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP, GameState.ACHIEVEMENTS -> {
+            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP, GameState.ACHIEVEMENTS, GameState.SETTINGS -> {
                 if (Gdx.input.justTouched()) {
                     when (state) {
                         GameState.SHOP -> handleShopTouch(touchX(), touchY())
@@ -1274,6 +1274,10 @@ class DepthDiverGame : ApplicationAdapter() {
                 GameState.ACHIEVEMENTS -> {
                     drawMenuBackgroundBlur()
                     drawAchievementsScreen()
+                }
+                GameState.SETTINGS -> {
+                    drawMenuBackgroundBlur()
+                    drawSettingsScreen()
                 }
                 GameState.PLAYING, GameState.PAUSED, GameState.GAME_OVER -> {}
             }
@@ -1751,6 +1755,69 @@ class DepthDiverGame : ApplicationAdapter() {
             Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, label, enabled = affordable)
         }
         font.color = Color.WHITE
+    }
+
+    private fun drawSettingsScreen() {
+        drawSubScreenHeader(Strings.t("settings"))
+        val panel = settingsPanel()
+        Widgets.panel(batch, uiPixel, panel.cx, panel.cy, panel.w, panel.h)
+
+        // Volume controls
+        val lineGap = min(50f, panel.h / 8f)
+        val startY = panel.cy + panel.h / 2f - 30f
+
+        // Master volume
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("masterVolume"), panel.cx - panel.w / 2f + 30f, startY)
+        val masterVol = Profile.masterVolume()
+        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, startY, 
+            "${(Profile.masterVolume() * 100).toInt()}%", enabled = true)
+
+        // SFX volume
+        val sfxY = startY - lineGap
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("sfxVolume"), panel.cx - panel.w / 2f + 30f, sfxY)
+        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, sfxY,
+            "${(Profile.sfxVolume() * 100).toInt()}%", enabled = true)
+
+        // Music volume
+        val musicY = sfxY - lineGap
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("musicVolume"), panel.cx - panel.w / 2f + 30f, musicY)
+        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, musicY,
+            "${(Profile.musicVolume() * 100).toInt()}%", enabled = true)
+
+        // Reduce motion
+        val reduceMotionY = musicY - lineGap
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("reduceMotion"), panel.cx - panel.w / 2f + 30f, reduceMotionY)
+        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, reduceMotionY,
+            if (Profile.reduceMotion()) Strings.t("on") else Strings.t("off"), 
+            enabled = true)
+
+        // High contrast
+        val contrastY = reduceMotionY - lineGap
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("highContrast"), panel.cx - panel.w / 2f + 30f, contrastY)
+        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, contrastY,
+            if (Profile.highContrast()) Strings.t("on") else Strings.t("off"),
+            enabled = true)
+
+        // Screen shake
+        val shakeY = contrastY - lineGap
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("screenShake"), panel.cx - panel.w / 2f + 30f, shakeY)
+        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, shakeY,
+            if (Profile.screenShakeEnabled()) Strings.t("on") else Strings.t("off"),
+            enabled = true)
+
+        font.color = Color.WHITE
+    }
+
+    private fun settingsPanel(): ShopRect {
+        val panelW = subPanelW()
+        val panelH = screenHeight * 0.7f
+        return ShopRect(screenWidth / 2f, screenHeight / 2f, panelW, panelH)
     }
 
     private fun drawHud() {

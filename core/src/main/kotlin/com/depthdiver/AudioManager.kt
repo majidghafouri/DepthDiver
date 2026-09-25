@@ -23,7 +23,7 @@ class AudioManager {
     private var initialized = false
     private var prefs: Preferences? = null
 
-    var muted: Boolean = false
+var muted: Boolean = false
         set(value) {
             field = value
             prefs?.putBoolean("muted", value)?.flush()
@@ -34,12 +34,30 @@ class AudioManager {
                 startAmbience()
             }
         }
-
+    
+    var masterVolume: Float = 1f
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+        }
+    
+    var sfxVolume: Float = 1f
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+        }
+    
+    var musicVolume: Float = 1f
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+        }
+    
     fun init() {
         if (initialized) return
         initialized = true
         prefs = Gdx.app.getPreferences("depthdiver-settings")
         muted = prefs?.getBoolean("muted", false) ?: false
+        masterVolume = Profile.masterVolume()
+        sfxVolume = Profile.sfxVolume()
+        musicVolume = Profile.musicVolume()
         pickup = generateSound("pickup", 880f, 0.14f)
         oxygen = generateSound("oxygen", 640f, 0.2f)
         crash = generateSound("crash", 120f, 0.35f)
@@ -50,45 +68,63 @@ class AudioManager {
         ambience = generateAmbience()
         if (!muted) startAmbience()
     }
+    
+    fun updateVolumes() {
+        masterVolume = Profile.masterVolume()
+        sfxVolume = Profile.sfxVolume()
+        musicVolume = Profile.musicVolume()
+    }
+    
+    fun updateMuted() {
+        muted = prefs?.getBoolean("muted", false) ?: false
+        if (muted) {
+            ambience?.stop()
+            ambiencePlaying = false
+        } else {
+            startAmbience()
+        }
+    }
 
     private fun startAmbience() {
         if (!canStartAmbience(muted, ambiencePlaying, ambience != null)) return
-        ambience?.loop(0.25f)
+        ambience?.loop(0.25f * masterVolume * musicVolume)
         ambiencePlaying = true
     }
 
     fun toggleMute() {
         muted = !muted
+        prefs?.putBoolean("muted", muted)?.flush()
+        updateMuted()
     }
 
-    fun playPickup() {
-        if (!muted) pickup?.play(0.6f)
+fun playPickup() {
+        if (!muted) pickup?.play(0.6f * masterVolume * sfxVolume)
     }
-
+    
     fun playOxygen() {
-        if (!muted) oxygen?.play(0.7f)
+        if (!muted) oxygen?.play(0.7f * masterVolume * sfxVolume)
     }
-
+    
     fun playCrash() {
-        if (!muted) crash?.play(0.9f)
+        if (!muted) crash?.play(0.9f * masterVolume * sfxVolume)
     }
-
+    
     fun playClick() {
-        if (!muted) click?.play(0.5f)
+        if (!muted) click?.play(0.5f * masterVolume * sfxVolume)
     }
-
+    
     fun playAchieve() {
-        if (!muted) achieve?.play(0.7f)
+        if (!muted) achieve?.play(0.7f * masterVolume * sfxVolume)
     }
-
+    
     fun playAlert() {
-        if (!muted) alert?.play(0.4f)
+        if (!muted) alert?.play(0.4f * masterVolume * sfxVolume)
     }
-
-    fun playAlarm() {
-        if (!muted) alarm?.play(0.8f)
+    
+fun playAlarm() {
+        if (!muted) alarm?.play(0.8f * masterVolume * sfxVolume)
     }
-
+    
     fun dispose() {
         ambience?.stop()
         pickup?.dispose()
