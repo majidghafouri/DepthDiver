@@ -4,9 +4,9 @@ import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 
-internal data class IntervalRange(val minimum: Float, val maximum: Float)
+data class IntervalRange(val minimum: Float, val maximum: Float)
 
-internal object DifficultyCurve {
+object DifficultyCurve {
 
     const val SCROLL_CEILING_RATIO = 0.88f
     const val HAZARD_RAMP_GAIN = 0.9f

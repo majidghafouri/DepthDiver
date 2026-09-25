@@ -1,6 +1,6 @@
 package com.depthdiver.game
 
-internal enum class GameState {
+enum class GameState {
     MAIN_MENU,
     PROFILE,
     LEADERBOARD,
@@ -11,14 +11,14 @@ internal enum class GameState {
     GAME_OVER,
 }
 
-internal enum class BackAction {
+enum class BackAction {
     EXIT,
     PAUSE,
     RESUME,
     MAIN_MENU,
 }
 
-internal fun backActionFor(state: GameState): BackAction = when (state) {
+fun backActionFor(state: GameState): BackAction = when (state) {
     GameState.MAIN_MENU -> BackAction.EXIT
     GameState.PLAYING -> BackAction.PAUSE
     GameState.PAUSED -> BackAction.RESUME
@@ -30,14 +30,14 @@ internal fun backActionFor(state: GameState): BackAction = when (state) {
     -> BackAction.MAIN_MENU
 }
 
-internal fun backActionTarget(state: GameState): GameAction? = when (backActionFor(state)) {
+fun backActionTarget(state: GameState): GameAction? = when (backActionFor(state)) {
     BackAction.EXIT -> null
     BackAction.PAUSE -> GameAction.Pause
     BackAction.RESUME -> GameAction.Resume
     BackAction.MAIN_MENU -> GameAction.MainMenu
 }
 
-internal sealed interface GameAction {
+sealed interface GameAction {
     data object StartRun : GameAction
     data object OpenProfile : GameAction
     data object OpenLeaderboard : GameAction
@@ -65,7 +65,7 @@ internal sealed interface GameAction {
     }
 }
 
-internal data class GameFlow(val state: GameState = GameState.MAIN_MENU) {
+data class GameFlow(val state: GameState = GameState.MAIN_MENU) {
 
     val isMenuVisible: Boolean get() = state == GameState.MAIN_MENU
 

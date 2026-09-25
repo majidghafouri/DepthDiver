@@ -3,16 +3,16 @@ package com.depthdiver.game
 import kotlin.math.min
 import kotlin.math.sqrt
 
-internal const val WORLD_WIDTH_METERS = 40f
-internal const val VIEW_HEIGHT_METERS = 30f
-internal const val PLAYER_RADIUS_METERS = 0.9f
-internal const val INITIAL_PLAYER_X_METERS = 20f
-internal const val INITIAL_PLAYER_Y_METERS = -22.5f
-internal const val PLAYER_BOTTOM_MARGIN_METERS = VIEW_HEIGHT_METERS * 0.25f
+const val WORLD_WIDTH_METERS = 40f
+const val VIEW_HEIGHT_METERS = 30f
+const val PLAYER_RADIUS_METERS = 0.9f
+const val INITIAL_PLAYER_X_METERS = 20f
+const val INITIAL_PLAYER_Y_METERS = -22.5f
+const val PLAYER_BOTTOM_MARGIN_METERS = VIEW_HEIGHT_METERS * 0.25f
 
-internal data class WorldCamera(val xMeters: Float, val yMeters: Float)
+data class WorldCamera(val xMeters: Float, val yMeters: Float)
 
-internal data class MoveDirection(val x: Float, val y: Float) {
+data class MoveDirection(val x: Float, val y: Float) {
     val length: Float get() = sqrt(x * x + y * y)
 
     val isZero: Boolean get() = x == 0f && y == 0f
@@ -27,7 +27,7 @@ internal data class MoveDirection(val x: Float, val y: Float) {
     }
 }
 
-internal data class WorldViewSpec(
+data class WorldViewSpec(
     val screenWidth: Float,
     val screenHeight: Float,
     val playerRadiusMeters: Float = PLAYER_RADIUS_METERS,

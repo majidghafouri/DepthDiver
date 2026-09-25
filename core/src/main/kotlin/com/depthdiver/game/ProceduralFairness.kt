@@ -4,12 +4,12 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.random.Random
 
-internal data class FairnessPlacement(
+data class FairnessPlacement(
     val centerXMeters: Float,
     val safeClearanceMeters: Float,
 )
 
-internal data class FairnessEelSpawn(
+data class FairnessEelSpawn(
     val dir: Int,
     val startXMeters: Float,
     val baseYMeters: Float,
@@ -17,7 +17,7 @@ internal data class FairnessEelSpawn(
     val reactionSeconds: Float,
 )
 
-internal class ProceduralFairness(
+class ProceduralFairness(
     private val worldWidthMeters: Float = WORLD_WIDTH_METERS,
     private val playerRadiusMeters: Float = PLAYER_RADIUS_METERS,
 ) {
