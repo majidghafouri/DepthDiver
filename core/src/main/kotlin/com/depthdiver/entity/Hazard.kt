@@ -25,6 +25,7 @@ sealed class Hazard {
         val dir: Int,
         val phase: Float,
         val baseY: Float,
-        val spawn: Float
+        val spawn: Float,
+        val speed: Float = 7.5f
     ) : Hazard()
 }

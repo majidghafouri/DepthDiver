@@ -25,6 +25,7 @@ import com.depthdiver.game.INITIAL_PLAYER_X_METERS
 import com.depthdiver.game.INITIAL_PLAYER_Y_METERS
 import com.depthdiver.game.MoveDirection
 import com.depthdiver.game.PLAYER_RADIUS_METERS
+import com.depthdiver.game.ProceduralFairness
 import com.depthdiver.game.WORLD_WIDTH_METERS
 import com.depthdiver.game.WorldViewSpec
 import com.depthdiver.run.BonusCategory
@@ -198,6 +199,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private var flow = GameFlow()
     private val state: GameState get() = flow.state
     private val gameplayClock = FixedStepClock()
+    private val fairness = ProceduralFairness()
     private val runSettlement = RunSettlement()
     private var activeRun: RunLedger? = null
     private var frameDelta = 0f
@@ -583,12 +585,12 @@ class DepthDiverGame : ApplicationAdapter() {
         hazardTimer -= delta
         if (hazardTimer <= 0) {
             spawnHazard()
-            hazardTimer = MathUtils.random(1.4f, 2.6f) * diff.spawnMul / (1f + depthFactor * 0.6f)
+            hazardTimer = fairness.hazardInterval(1.4f, 2.6f, depth, diff.spawnMul)
         }
         pickupTimer -= delta
         if (pickupTimer <= 0) {
             spawnPickup()
-            pickupTimer = MathUtils.random(3f, 5.5f) * diff.pickupMul
+            pickupTimer = fairness.pickupInterval(3f, 5.5f, diff.pickupMul)
         }
 
         updateEntities(delta, scrollSpeed)
@@ -625,6 +627,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 pickup.collected = true
                 when (pickup) {
                     is Pickup.OxygenTank -> {
+                        fairness.noteOxygenTank(depth)
                         oxygen = (oxygen + 0.4f).coerceAtMost(maxOxygen)
                         audio.playOxygen()
                         triggerShake(0.15f, 0.3f)
@@ -715,7 +718,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     hazard.rect.x += MathUtils.sin(elapsed * 0.8f + hazard.phase) * 0.7f * delta
                 }
                 is Hazard.Eel -> {
-                    hazard.rect.x += 7.5f * hazard.dir * delta
+                    hazard.rect.x += hazard.speed * hazard.dir * delta
                     hazard.rect.y = hazard.baseY - scrollSpeed * (elapsed - hazard.spawn) * 0.35f + MathUtils.sin(elapsed * 2f + hazard.phase) * 0.4f
                 }
             }
@@ -745,55 +748,73 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun spawnHazard() {
-        val roll = MathUtils.random()
+        val roll = fairness.unit()
         val top = worldViewSpec.worldTop(worldCameraTarget)
-        val x = MathUtils.random(0f, (WORLD_WIDTH_METERS - 4f).coerceAtLeast(0f))
         when {
             roll < 0.3f -> {
                 hazards.add(Hazard.Rock(Rectangle(-1.2f, top + 2f, 4.8f, 6f), 0f))
                 hazards.add(Hazard.Rock(Rectangle(WORLD_WIDTH_METERS - 3.6f, top + 2f, 4.8f, 6f), 0f))
+                fairness.recordHazard(1.2f, 4.8f)
+                fairness.recordHazard(WORLD_WIDTH_METERS - 1.2f, 4.8f)
             }
             depth > 45f && roll < 0.45f -> {
-                val dir = if (MathUtils.random() < 0.5f) 1 else -1
                 val width = 7.5f
-                val baseY = top + MathUtils.random(0.5f, 2.5f)
-                val startX = if (dir == 1) -width + 0.25f else WORLD_WIDTH_METERS - 0.25f
+                val eel = fairness.eelSpawn(
+                    playerXMeters = playerX,
+                    playerYMeters = playerY,
+                    widthMeters = width,
+                    topYMeters = top,
+                    bandOffsetMinimum = 0.5f,
+                    bandOffsetMaximum = 6.5f,
+                    minBandGapMeters = 3f,
+                    minPlayerGapMeters = 2.5f,
+                    minReactionSeconds = 1.6f,
+                    baseSpeedMetersPerSecond = 7.5f,
+                    depthMeters = depth,
+                )
                 hazards.add(
                     Hazard.Eel(
-                        Rectangle(startX, baseY, width, 1.7f),
-                        dir,
-                        MathUtils.random(0f, MathUtils.PI2),
-                        baseY,
-                        elapsed
+                        Rectangle(eel.startXMeters, eel.baseYMeters, width, 1.7f),
+                        eel.dir,
+                        fairness.range(0f, MathUtils.PI2),
+                        eel.baseYMeters,
+                        elapsed,
+                        eel.speedMetersPerSecond
                     )
                 )
             }
             depth > 35f && roll < 0.65f -> {
+                val width = 3f
+                val center = fairness.hazardCenter(playerX, width, depth).centerXMeters
                 hazards.add(
                     Hazard.Jellyfish(
-                        Rectangle(x, top + 3f, 3f, 3f),
-                        MathUtils.random(0f, MathUtils.PI2),
-                        MathUtils.random(1.25f, 2.25f),
-                        x
+                        Rectangle(center - width / 2f, top + 3f, width, width),
+                        fairness.range(0f, MathUtils.PI2),
+                        fairness.range(1.25f, 2.25f),
+                        center
                     )
                 )
             }
             depth > 18f && roll < 0.85f -> {
-                hazards.add(Hazard.Mine(Rectangle(x, top + 2.4f, 2.4f, 2.4f), MathUtils.random(0f, MathUtils.PI2)))
+                val width = 2.4f
+                val center = fairness.hazardCenter(playerX, width, depth).centerXMeters
+                hazards.add(Hazard.Mine(Rectangle(center - width / 2f, top + 2.4f, width, width), fairness.range(0f, MathUtils.PI2)))
             }
             depth > 80f && roll < 0.97f -> {
-                val boss = depth > 120f && MathUtils.random() < 0.06f
+                val boss = depth > 120f && fairness.unit() < 0.06f
                 if (boss) {
                     bossWarning = 2.5f
                     audio.playAlarm()
                 }
                 val w = if (boss) 6.5f else 4.2f
                 val h = if (boss) 2.3f else 1.5f
-                hazards.add(Hazard.Shark(Rectangle(x, top + 3f, w, h), 0f, boss))
+                val center = fairness.hazardCenter(playerX, w, depth).centerXMeters
+                hazards.add(Hazard.Shark(Rectangle(center - w / 2f, top + 3f, w, h), 0f, boss))
             }
             else -> {
-                val size = MathUtils.random(2.25f, 4.25f)
-                hazards.add(Hazard.Rock(Rectangle(x, top + 4f, size, size), MathUtils.random(0f, MathUtils.PI2)))
+                val size = fairness.range(2.25f, 4.25f)
+                val center = fairness.hazardCenter(playerX, size, depth).centerXMeters
+                hazards.add(Hazard.Rock(Rectangle(center - size / 2f, top + 4f, size, size), fairness.range(0f, MathUtils.PI2)))
             }
         }
     }
@@ -810,12 +831,16 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun spawnPickup() {
         val top = worldViewSpec.worldTop(worldCameraTarget)
-        val x = MathUtils.random(0f, (WORLD_WIDTH_METERS - 2f).coerceAtLeast(0f))
-        val phase = MathUtils.random(0f, MathUtils.PI2)
-        if (MathUtils.random() < 0.65f) {
-            pickups.add(Pickup.Pearl(Rectangle(x, top + 2f, 1.2f, 1.2f), phase))
+        val oxygenFraction = if (maxOxygen > 0f) oxygen / maxOxygen else 0f
+        val forceTank = fairness.shouldForceOxygenTank(oxygenFraction, depth)
+        val tank = forceTank || fairness.unit() >= 0.65f
+        val width = if (tank) 1.6f else 1.2f
+        val center = fairness.pickupCenter(playerX, width, depth)
+        val phase = fairness.range(0f, MathUtils.PI2)
+        if (tank) {
+            pickups.add(Pickup.OxygenTank(Rectangle(center - width / 2f, top + 2.4f, width, width), phase))
         } else {
-            pickups.add(Pickup.OxygenTank(Rectangle(x, top + 2.4f, 1.6f, 1.6f), phase))
+            pickups.add(Pickup.Pearl(Rectangle(center - width / 2f, top + 2f, width, width), phase))
         }
     }
 
@@ -2097,6 +2122,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun resetWorld() {
         activeRun = null
+        fairness.reset(System.nanoTime())
         gameplayClock.reset()
         frameDelta = 0f
         playerX = INITIAL_PLAYER_X_METERS
