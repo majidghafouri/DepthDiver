@@ -15,3 +15,9 @@ build/
 local.properties
 audio-runtime/
 app/src/main/jniLibs/
+
+# Keystore / signing
+*.jks
+*.keystore
+keystore.properties
+*.keystore.properties

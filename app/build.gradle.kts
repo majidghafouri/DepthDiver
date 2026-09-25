@@ -1,9 +1,27 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 import java.util.zip.ZipFile
 
 plugins {
     alias(libs.plugins.android.application)
 }
+
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun signingValue(key: String, env: String): String? =
+    (keystoreProperties.getProperty(key) ?: System.getenv(env))?.takeIf { it.isNotBlank() }
+
+val releaseStorePath = signingValue("storeFile", "DEPTHDIVER_STORE_FILE")
+    ?.let { rootProject.file(it) }
+    ?.takeIf { it.exists() }
+val releaseStorePassword = signingValue("storePassword", "DEPTHDIVER_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "DEPTHDIVER_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "DEPTHDIVER_KEY_PASSWORD")
+val hasReleaseSigning = releaseStorePath != null && releaseStorePassword != null &&
+    releaseKeyAlias != null && releaseKeyPassword != null
 
 android {
     namespace = "app.depthdiver"
@@ -15,15 +33,33 @@ android {
         applicationId = "app.depthdiver"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseStorePath
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
+            isMinifyEnabled = true
+            isShrinkResources = true
             optimization {
-                enable = false
+                enable = true
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {
@@ -39,6 +75,14 @@ android {
         resources {
             pickFirsts += listOf("META-INF/gdx.backend.android.properties")
         }
+    }
+    lint {
+        abortOnError = true
+        warningsAsErrors = false
+        checkReleaseBuilds = false
+        htmlReport = true
+        xmlReport = true
+        disable += setOf("GradleDependency", "OldTargetApi", "UnusedResources")
     }
 }
 
