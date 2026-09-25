@@ -98,6 +98,49 @@ data class Particle(
     var size: Float
 )
 
+internal const val MAX_FRAME_DELTA = 0.05f
+
+internal fun safeFrameDelta(delta: Float): Float = when {
+    !delta.isFinite() || delta <= 0f -> 0f
+    else -> min(delta, MAX_FRAME_DELTA)
+}
+
+internal enum class ShieldCollisionResult {
+    ACTIVATED,
+    BLOCKED,
+    FATAL,
+}
+
+internal fun resolveShieldCollision(shieldLevel: Int, shieldActive: Boolean, shieldCooldown: Float): ShieldCollisionResult = when {
+    shieldActive -> ShieldCollisionResult.BLOCKED
+    shieldLevel > 0 && shieldCooldown <= 0f -> ShieldCollisionResult.ACTIVATED
+    else -> ShieldCollisionResult.FATAL
+}
+
+internal fun shieldDuration(shieldLevel: Int): Float = (10f - shieldLevel * 1.5f).coerceAtLeast(0f)
+
+internal data class TouchTarget(
+    val cx: Float,
+    val cy: Float,
+    val w: Float,
+    val h: Float,
+) {
+    fun contains(tx: Float, ty: Float): Boolean =
+        tx >= cx - w / 2f && tx <= cx + w / 2f && ty >= cy - h / 2f && ty <= cy + h / 2f
+}
+
+internal enum class GameOverAction {
+    RESTART,
+    MENU,
+    NONE,
+}
+
+internal fun gameOverActionAt(tx: Float, ty: Float, restart: TouchTarget, menu: TouchTarget): GameOverAction = when {
+    restart.contains(tx, ty) -> GameOverAction.RESTART
+    menu.contains(tx, ty) -> GameOverAction.MENU
+    else -> GameOverAction.NONE
+}
+
 class DepthDiverGame : ApplicationAdapter() {
 
     private lateinit var batch: SpriteBatch
@@ -118,6 +161,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private val hazards = mutableListOf<Hazard>()
     private val pickups = mutableListOf<Pickup>()
     private var state: GameState = GameState.MAIN_MENU
+    private var frameDelta = 0f
     private var hudPauseCx = 0f
     private var hudPauseCy = 0f
     private var hudPauseW = 0f
@@ -200,10 +244,13 @@ class DepthDiverGame : ApplicationAdapter() {
         prefs = Gdx.app.getPreferences("depthdiver")
         bestDepth = prefs.getFloat("bestDepth", 0f)
         bestScore = prefs.getInteger("bestScore", 0)
+        if (prefs.getBoolean("runSaved", false)) {
+            prefs.remove("runSaved")
+            prefs.flush()
+        }
         refreshUpgradeLevels()
         applyUpgrades()
         audio.init()
-        restoreInterruptedRun()
 
         val playerPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
         playerPix.setColor(0.2f, 0.75f, 1f, 1f)
@@ -325,43 +372,41 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     override fun render() {
-        menuTime += Gdx.graphics.deltaTime
+        frameDelta = safeFrameDelta(Gdx.graphics.deltaTime)
+        menuTime += frameDelta
         if (achievementToastTimer > 0f) {
-            achievementToastTimer -= Gdx.graphics.deltaTime
+            achievementToastTimer -= frameDelta
             if (achievementToastTimer <= 0f) achievementToast = null
         }
-        if (bossWarning > 0f) bossWarning -= Gdx.graphics.deltaTime
+        if (bossWarning > 0f) bossWarning -= frameDelta
         handleInput()
-        update(Gdx.graphics.deltaTime)
+        update(frameDelta)
         draw()
     }
 
     override fun pause() {
-        if (state == GameState.PLAYING) {
-            prefs.putFloat("runDepth", depth)
-            prefs.putFloat("runScore", score.toFloat())
-            prefs.putFloat("runOxygen", oxygen)
-            prefs.putFloat("runElapsed", elapsed)
-            prefs.putBoolean("runSaved", true)
-            prefs.flush()
-        }
+        pauseGame()
     }
 
     override fun resume() {
-        restoreInterruptedRun()
+        frameDelta = 0f
     }
 
-    private fun restoreInterruptedRun() {
-        if (!prefs.getBoolean("runSaved", false)) return
-        depth = prefs.getFloat("runDepth", 0f)
-        score = prefs.getFloat("runScore", 0f).toInt()
-        oxygen = prefs.getFloat("runOxygen", 1f)
-        elapsed = prefs.getFloat("runElapsed", 0f)
-        prefs.putBoolean("runSaved", false)
-        prefs.flush()
-        if (state == GameState.GAME_OVER) {
-            endGame()
-        }
+    private fun pauseGame() {
+        if (state != GameState.PLAYING) return
+        state = GameState.PAUSED
+        stopShake()
+    }
+
+    private fun resumeGame() {
+        if (state != GameState.PAUSED) return
+        state = GameState.PLAYING
+        frameDelta = 0f
+    }
+
+    private fun stopShake() {
+        shakeTimer = 0f
+        shakeIntensity = 0f
     }
 
     private fun triggerShake(duration: Float, intensity: Float) {
@@ -423,6 +468,12 @@ class DepthDiverGame : ApplicationAdapter() {
         val diff = currentDifficulty()
         oxygen -= delta * diff.drain
         depth = max(depth, (worldHeight - max(playerY, playerRadius)) / pixelsPerMeter)
+        if (oxygen <= 0f) {
+            oxygen = 0f
+            settleRunRecords()
+            endGame()
+            return
+        }
 
         if (shakeTimer > 0f) {
             shakeTimer -= delta
@@ -466,20 +517,31 @@ class DepthDiverGame : ApplicationAdapter() {
 
         updateEntities(delta, scrollSpeed)
 
-        for (hazard in hazards) {
-            if (playerRect().overlaps(hazard.rect)) {
-                if (upgradeShieldLevel > 0 && !shieldActive && shieldCooldown <= 0f) {
+        val hazardIterator = hazards.iterator()
+        while (hazardIterator.hasNext()) {
+            val hazard = hazardIterator.next()
+            if (!playerRect().overlaps(hazard.rect)) continue
+            when (resolveShieldCollision(upgradeShieldLevel, shieldActive, shieldCooldown)) {
+                ShieldCollisionResult.ACTIVATED -> {
                     shieldActive = true
-                    shieldCooldown = 10f - upgradeShieldLevel * 1.5f
-                    audio.playOxygen()
+                    shieldCooldown = shieldDuration(upgradeShieldLevel)
+                    audio.playClick()
                     triggerShake(0.15f, 8f)
                     Gdx.input.vibrate(60)
                     spawnParticles(playerX, playerY, Color.MAGENTA, 15)
-                } else {
+                    hazardIterator.remove()
+                }
+                ShieldCollisionResult.BLOCKED -> {
+                    spawnParticles(playerX, playerY, Color.MAGENTA, 6)
+                    hazardIterator.remove()
+                }
+                ShieldCollisionResult.FATAL -> {
                     triggerShake(0.3f, 12f)
                     Gdx.input.vibrate(100)
                     spawnParticles(playerX, playerY, Color.RED, 12)
+                    settleRunRecords()
                     endGame()
+                    return
                 }
             }
         }
@@ -512,9 +574,6 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
             }
         }
-        if (oxygen <= 0f) {
-            endGame()
-        }
 
         if (oxygen <= maxOxygen * 0.25f) {
             lowOxyTick -= delta
@@ -531,14 +590,7 @@ class DepthDiverGame : ApplicationAdapter() {
             if (comboTimer <= 0f) combo = 1
         }
 
-        if (depth > bestDepth) {
-            bestDepth = depth
-            prefs.putFloat("bestDepth", bestDepth)
-        }
-        if (score > bestScore) {
-            bestScore = score
-            prefs.putInteger("bestScore", bestScore)
-        }
+        settleRunRecords()
 
         val earned = Achievements.checkAndEarn()
         if (earned != null) {
@@ -731,7 +783,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
             GameState.PLAYING -> {
                 if (escJust || pJust) {
-                    state = GameState.PAUSED
+                    pauseGame()
                     return
                 }
                 if (mJust) {
@@ -743,14 +795,14 @@ class DepthDiverGame : ApplicationAdapter() {
                     return
                 }
                 if (Gdx.input.justTouched() && Widgets.contains(touchX(), touchY(), hudPauseCx, hudPauseCy, hudPauseW, hudPauseH)) {
-                    state = GameState.PAUSED
+                    pauseGame()
                     return
                 }
             }
 
             GameState.PAUSED -> {
                 if (escJust || pJust) {
-                    state = GameState.PLAYING
+                    resumeGame()
                     return
                 }
                 if (mJust) {
@@ -777,14 +829,11 @@ class DepthDiverGame : ApplicationAdapter() {
                     return
                 }
                 if (Gdx.input.justTouched()) {
-                    val tx = touchX()
-                    val ty = touchY()
-                    val pillY = gameOverBox().pillY
-                    val menu = Strings.t("menu")
-                    if (Widgets.contains(tx, ty, worldWidth / 2f + 95f, pillY, Widgets.pillW(font, menu), Widgets.pillH(font, menu))) {
-                        goToMenu()
-                    } else {
-                        reset()
+                    val targets = gameOverTargets()
+                    when (gameOverActionAt(touchX(), touchY(), targets.restart, targets.menu)) {
+                        GameOverAction.RESTART -> reset()
+                        GameOverAction.MENU -> goToMenu()
+                        GameOverAction.NONE -> Unit
                     }
                     return
                 }
@@ -793,7 +842,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
         if (state != GameState.PLAYING) return
 
-        val delta = Gdx.graphics.deltaTime
+        val delta = frameDelta
         var dx = 0f
         var dy = 0f
         if (Gdx.input.isKeyPressed(Input.Keys.LEFT) || Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1f
@@ -1025,6 +1074,22 @@ class DepthDiverGame : ApplicationAdapter() {
         val pillY: Float,
     )
 
+    private data class GameOverTargets(
+        val restart: TouchTarget,
+        val menu: TouchTarget,
+    )
+
+    private fun gameOverTargets(): GameOverTargets {
+        val centerX = worldWidth / 2f
+        val pillY = gameOverBox().pillY
+        val restartLabel = Strings.t("restart")
+        val menuLabel = Strings.t("menu")
+        return GameOverTargets(
+            restart = TouchTarget(centerX - 95f, pillY, Widgets.pillW(font, restartLabel), Widgets.pillH(font, restartLabel)),
+            menu = TouchTarget(centerX + 95f, pillY, Widgets.pillW(font, menuLabel), Widgets.pillH(font, menuLabel)),
+        )
+    }
+
     /** One shared source for the game-over screen layout so drawing and hit-tests agree
      *  and text/buttons always clear each other. Badge/panel rows are stacked from the
      *  title downward with spacing that scales with the screen, never fixed offsets. */
@@ -1057,7 +1122,7 @@ class DepthDiverGame : ApplicationAdapter() {
         val lineHeight = GlyphLayout(font, "Hg").height
         val r = pauseRows(tall, lineHeight)
         if (Widgets.contains(tx, ty, centerX, centerY + r.resume, Widgets.pillW(font, labels[0]), Widgets.pillH(font, labels[0]))) {
-            state = GameState.PLAYING
+            resumeGame()
             audio.playClick()
             return
         }
@@ -1154,7 +1219,7 @@ class DepthDiverGame : ApplicationAdapter() {
         drawWorldBackground()
         val originalCamX = camera.position.x
         val originalCamY = camera.position.y
-        if (shakeTimer > 0f) {
+        if (state == GameState.PLAYING && shakeTimer > 0f) {
             val progress = 1f - shakeTimer / 0.3f
             val currentIntensity = shakeIntensity * (1f - progress * 0.7f)
             camera.position.x += MathUtils.random(-currentIntensity, currentIntensity)
@@ -1201,7 +1266,7 @@ class DepthDiverGame : ApplicationAdapter() {
             playerRadius * 2f
         )
 
-        if (shakeTimer > 0f) {
+        if (state == GameState.PLAYING && shakeTimer > 0f) {
             camera.position.x = originalCamX
             camera.position.y = originalCamY
             camera.update()
@@ -1745,8 +1810,9 @@ class DepthDiverGame : ApplicationAdapter() {
             }
             font.color = Color.WHITE
 
-            Widgets.pill(batch, font, uiPixel, centerX - 95f, box.pillY, Strings.t("restart"))
-            Widgets.pill(batch, font, uiPixel, centerX + 95f, box.pillY, Strings.t("menu"))
+            val targets = gameOverTargets()
+            Widgets.pill(batch, font, uiPixel, targets.restart.cx, targets.restart.cy, Strings.t("restart"))
+            Widgets.pill(batch, font, uiPixel, targets.menu.cx, targets.menu.cy, Strings.t("menu"))
         }
         if (achievementToastTimer > 0f) drawAchievementToast()
     }
@@ -1834,6 +1900,17 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun playerRect() =
         Rectangle(playerX - playerRadius, playerY - playerRadius, playerRadius * 2f, playerRadius * 2f)
 
+    private fun settleRunRecords() {
+        if (depth > bestDepth) {
+            bestDepth = depth
+            prefs.putFloat("bestDepth", bestDepth)
+        }
+        if (score > bestScore) {
+            bestScore = score
+            prefs.putInteger("bestScore", bestScore)
+        }
+    }
+
     private fun endGame() {
         if (state == GameState.PLAYING) {
             state = GameState.GAME_OVER
@@ -1852,6 +1929,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 achievementToastTimer = 3f
             }
             audio.playCrash()
+            prefs.flush()
         }
     }
 
@@ -1861,6 +1939,7 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun reset() {
+        frameDelta = 0f
         playerX = worldWidth / 2f
         playerY = worldHeight * 0.25f
         depth = 0f
@@ -1882,6 +1961,7 @@ class DepthDiverGame : ApplicationAdapter() {
         hazards.clear()
         pickups.clear()
         particles.clear()
+        stopShake()
         state = GameState.PLAYING
     }
 

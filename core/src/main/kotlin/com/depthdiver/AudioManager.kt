@@ -6,6 +6,9 @@ import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.math.MathUtils
 import java.util.Random
 
+internal fun canStartAmbience(muted: Boolean, playing: Boolean, soundAvailable: Boolean): Boolean =
+    !muted && !playing && soundAvailable
+
 class AudioManager {
 
     private var pickup: Sound? = null
@@ -49,7 +52,7 @@ class AudioManager {
     }
 
     private fun startAmbience() {
-        if (ambiencePlaying) return
+        if (!canStartAmbience(muted, ambiencePlaying, ambience != null)) return
         ambience?.loop(0.25f)
         ambiencePlaying = true
     }
@@ -104,6 +107,8 @@ class AudioManager {
         achieve = null
         alert = null
         alarm = null
+        ambiencePlaying = false
+        prefs = null
         initialized = false
     }
 
