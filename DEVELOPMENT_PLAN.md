@@ -84,9 +84,11 @@
 - [ ] Procedural generation tuning parameters
 
 ### Phase 14: Architecture Refactor
-- [ ] Decompose DepthDiverGame (2200+ lines) into components
-- [ ] ECS or component-based architecture
-- [ ] Dependency injection / service locator
+- [x] Step 1: extract HUD into a renderer driven by an immutable state snapshot
+  (game god class 2952 -> 2902 lines; pause hitbox no longer stashed in fields)
+- [ ] Step 2: extract world/background rendering
+- [ ] Step 3: extract menu + sub-screen rendering
+- [ ] Step 4: extract run lifecycle / settlement
 - [ ] Automated UI testing
 
 ### Phase 15: Monetization (Optional)

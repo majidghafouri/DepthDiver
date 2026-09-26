@@ -26,6 +26,8 @@ import com.depthdiver.game.BackAction
 import com.depthdiver.game.Biome
 import com.depthdiver.game.GamepadBridge
 import com.depthdiver.game.UiScale
+import com.depthdiver.hud.HudRenderer
+import com.depthdiver.hud.HudState
 import com.depthdiver.game.GamepadState
 import com.depthdiver.game.PadAction
 import com.depthdiver.game.gamepadActions
@@ -300,6 +302,9 @@ class DepthDiverGame : ApplicationAdapter() {
     private var screenWidth = 800f
     private var screenHeight = 600f
     private var uiScale = UiScale(1f, UiScale.MIN_TOUCH_PX)
+
+    /** Shares the game's batch/font/pixel, so it must be built in create(). */
+    private lateinit var hudRenderer: HudRenderer
     private var worldViewSpec = WorldViewSpec(screenWidth, screenHeight)
     private var worldCameraTarget = worldViewSpec.cameraFor(INITIAL_PLAYER_X_METERS, INITIAL_PLAYER_Y_METERS)
     private var menuFbo: FrameBuffer? = null
@@ -398,6 +403,7 @@ class DepthDiverGame : ApplicationAdapter() {
         uiPix.setColor(Color.WHITE)
         uiPix.fill()
         uiPixel = Texture(uiPix)
+        hudRenderer = HudRenderer(batch, font, uiPixel)
         uiPix.dispose()
 
         val sharkPix = Pixmap(96, 32, Pixmap.Format.RGBA8888)
@@ -2430,170 +2436,114 @@ class DepthDiverGame : ApplicationAdapter() {
         val glyphLayout = GlyphLayout()
         font.color = Color.WHITE
 
-        glyphLayout.setText(font, "Hg")
-        val lineHeight = glyphLayout.height
-        val padding = 6f
-        val lineSpacing = 8f
-        val colGap = 22f
-
-        var y = screenHeight - lineHeight - padding
-
-        font.color = Color(0.6f, 0.85f, 1f, 0.9f)
-        glyphLayout.setText(font, Strings.t(biome.nameKey))
-        font.draw(batch, glyphLayout, screenWidth / 2f - glyphLayout.width / 2f, y)
-        font.color = Color.WHITE
-
-        val depthStr = "${Strings.t("depth")}: ${depth.toInt()} m"
-        glyphLayout.setText(font, depthStr)
-        val depthW = glyphLayout.width
-        font.draw(batch, glyphLayout, 10f, y)
-
-        val scoreStr = "${Strings.t("score")}: $score"
-        glyphLayout.setText(font, scoreStr)
-        val scoreX = 10f + depthW + colGap
-        font.draw(batch, glyphLayout, scoreX, y)
-
-        font.color = Color.CYAN
-        glyphLayout.setText(font, difficultyLabel())
-        font.draw(batch, glyphLayout, screenWidth - 10f - glyphLayout.width, y)
-        font.color = Color.WHITE
-
-        if (bossWarning > 0f) {
-            font.color = Color(1f, 0.35f, 0.3f, 1f)
-            glyphLayout.setText(font, Strings.t("leviathan"))
-            font.draw(batch, glyphLayout, screenWidth / 2f - glyphLayout.width / 2f, y - lineHeight * 1.4f)
-            font.color = Color.WHITE
-        }
-
-        y -= lineHeight + lineSpacing
-        val oxygenStr = "${Strings.t("oxygen")}: ${(oxygen * 100).toInt()}%"
-        glyphLayout.setText(font, oxygenStr)
-        font.draw(batch, glyphLayout, 10f, y)
-
-        y -= lineHeight + lineSpacing
-        if (state == GameState.PLAYING) {
-            val pl = Strings.t("pause")
-            val plW = Widgets.pillW(font, pl)
-            val plH = Widgets.pillH(font, pl)
-            val plCX = screenWidth - 12f - plW / 2f
-            val plCY = y
-            val (w, h) = Widgets.pill(batch, font, uiPixel, plCX, plCY, pl)
-            hudPauseW = w
-            hudPauseH = h
-            hudPauseCx = plCX
-            hudPauseCy = plCY
-        } else {
-            hudPauseW = screenWidth * 0.1f
-            hudPauseH = screenHeight * 0.05f
-            hudPauseCx = screenWidth - 12f - hudPauseW / 2f
-            hudPauseCy = y
-        }
-
-        y -= lineHeight + lineSpacing
-        val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m / $bestScore"
-        glyphLayout.setText(font, bestStr)
-        font.draw(batch, glyphLayout, 10f, y)
-
-        if (state == GameState.PLAYING && combo > 1) {
-            font.color = Color.GOLD
-            glyphLayout.setText(font, "${Strings.t("combo")} x$combo")
-            val comboY = y - lineHeight * 1.5f
-            font.draw(batch, glyphLayout, 10f, comboY)
-            val barW = 90f
-            val barH = 5f
-            val frac = (comboTimer / maxComboWindow).coerceIn(0f, 1f)
-            batch.setColor(0f, 0f, 0f, 0.6f)
-            batch.draw(uiPixel, 10f, comboY - lineHeight * 0.6f - barH, barW, barH)
-            batch.setColor(1f, 0.85f, 0.2f, 1f)
-            batch.draw(uiPixel, 10f, comboY - lineHeight * 0.6f - barH, barW * frac, barH)
-            batch.setColor(1f, 1f, 1f, 1f)
-            font.color = Color.WHITE
-        }
+        val hudState = HudState(
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            lineHeight = glyphLayout.setText(font, "Hg").let { glyphLayout.height },
+            depth = depth,
+            score = score,
+            bestDepth = bestDepth,
+            bestScore = bestScore,
+            oxygen = oxygen,
+            maxOxygen = maxOxygen,
+            combo = combo,
+            comboTimer = comboTimer,
+            maxComboWindow = maxComboWindow,
+            elapsed = elapsed,
+            isPlaying = state == GameState.PLAYING,
+            biomeNameKey = biome.nameKey,
+            bossWarningRemaining = bossWarning,
+            scale = uiScale.factor,
+        )
+        val pauseLabel = Strings.t("pause")
+        val layout = hudRenderer.render(
+            state = hudState,
+            difficultyLabel = difficultyLabel(),
+            pausePillSize = Widgets.pillW(font, pauseLabel, uiScale.factor) to
+                Widgets.pillH(font, pauseLabel, uiScale.factor),
+        )
+        hudPauseCx = layout.pauseCx
+        hudPauseCy = layout.pauseCy
+        hudPauseW = layout.pauseW
+        hudPauseH = layout.pauseH
 
         if (state == GameState.PAUSED) {
-            drawPauseOverlay(glyphLayout, lineHeight)
-        }
-        if (state == GameState.PLAYING && oxygen <= maxOxygen * 0.25f) {
-            val danger = ((maxOxygen * 0.25f - oxygen) / (maxOxygen * 0.25f)).coerceIn(0f, 1f)
-            val alpha = 0.15f * danger * (0.65f + 0.35f * ((MathUtils.sin(elapsed * 5f) + 1f) / 2f))
-            val edge = 26f
-            batch.setColor(1f, 0.1f, 0.08f, alpha)
-            batch.draw(uiPixel, 0f, screenHeight - edge, screenWidth, edge)
-            batch.draw(uiPixel, 0f, 0f, screenWidth, edge)
-            batch.draw(uiPixel, 0f, edge, edge, screenHeight - 2f * edge)
-            batch.draw(uiPixel, screenWidth - edge, edge, edge, screenHeight - 2f * edge)
-            batch.setColor(1f, 1f, 1f, 1f)
+            drawPauseOverlay(glyphLayout, hudState.lineHeight)
         }
         if (state == GameState.GAME_OVER) {
-            val centerX = screenWidth / 2f
-            val box = gameOverBox()
-            val tall = screenHeight >= 560f
-
-            font.color = Color.RED
-            val gameOverStr = "${Strings.t("gameOver")} - ${Strings.t("pressR")}"
-            glyphLayout.setText(font, gameOverStr)
-            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.titleY)
-
-            if (tall) {
-                if (!box.recordY.isNaN()) {
-                    font.color = Color.GOLD
-                    glyphLayout.setText(font, Strings.t("newRecord"))
-                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.recordY)
-                }
-                if (!box.top5Y.isNaN()) {
-                    font.color = Color.GOLD
-                    glyphLayout.setText(font, Strings.t("top5"))
-                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.top5Y)
-                }
-
-                val panelCx = centerX
-                val panelCy = (box.panelTop + box.panelBottom) / 2f
-                val panelW = min(screenWidth * 0.75f, 460f)
-                Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, box.panelH)
-
-                val rowGap = min(44f, screenHeight / 22f)
-                val rows = listOf(
-                    Pair(Strings.t("reachedDepth"), "${depth.toInt()} m"),
-                    Pair(Strings.t("score"), "$score"),
-                    Pair(Strings.t("pearlsGained"), "+$runPearls"),
-                    Pair("${Strings.t("best")} ${Strings.t("depth").lowercase()}", "${bestDepth.toInt()} m"),
-                    Pair("${Strings.t("best")} ${Strings.t("score").lowercase()}", "$bestScore")
-                )
-                val labelX = panelCx - panelW / 2f + 30f
-                val valueX = panelCx + panelW / 2f - 30f
-                rows.forEachIndexed { i, (label, value) ->
-                    val cy = box.panelTop - 28f - rowGap * i
-                    font.color = Color.WHITE
-                    Widgets.textLeft(batch, font, label, labelX, cy)
-                    font.color = Color.GOLD
-                    Widgets.textRight(batch, font, value, valueX, cy)
-                }
-                font.color = Color.WHITE
-            } else {
-                val centerY = screenHeight / 2f
-                font.color = Color.GOLD
-                val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
-                glyphLayout.setText(font, bestStr)
-                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f)
-                if (leaderboardMade) {
-                    font.color = Color.GOLD
-                    glyphLayout.setText(font, Strings.t("top5"))
-                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f - lineHeight * 1.6f)
-                }
-                if (score > startBestScore) {
-                    font.color = Color.GOLD
-                    glyphLayout.setText(font, Strings.t("newRecord"))
-                    font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + glyphLayout.height / 2f + 16f + lineHeight * 1.6f)
-                }
-            }
-            font.color = Color.WHITE
-
-            val targets = gameOverTargets()
-            Widgets.pill(batch, font, uiPixel, targets.restart.cx, targets.restart.cy, Strings.t("restart"))
-            Widgets.pill(batch, font, uiPixel, targets.menu.cx, targets.menu.cy, Strings.t("menu"))
+            drawGameOverOverlay(glyphLayout, hudState.lineHeight)
         }
         if (biomeToastTimer > 0f) drawBiomeBanner()
         if (achievementToastTimer > 0f) drawAchievementToast()
+    }
+
+    private fun drawGameOverOverlay(glyphLayout: GlyphLayout, lineHeight: Float) {
+        val centerX = screenWidth / 2f
+        val box = gameOverBox()
+        val tall = screenHeight >= 560f
+
+        font.color = Color.RED
+        val gameOverStr = "${Strings.t("gameOver")} - ${Strings.t("pressR")}"
+        glyphLayout.setText(font, gameOverStr)
+        font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.titleY)
+
+        if (tall) {
+            if (!box.recordY.isNaN()) {
+                font.color = Color.GOLD
+                glyphLayout.setText(font, Strings.t("newRecord"))
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.recordY)
+            }
+            if (!box.top5Y.isNaN()) {
+                font.color = Color.GOLD
+                glyphLayout.setText(font, Strings.t("top5"))
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.top5Y)
+            }
+
+            val panelCx = centerX
+            val panelCy = (box.panelTop + box.panelBottom) / 2f
+            val panelW = min(screenWidth * 0.75f, 460f)
+            Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, box.panelH)
+
+            val rowGap = min(44f, screenHeight / 22f)
+            val rows = listOf(
+                Pair(Strings.t("reachedDepth"), "${depth.toInt()} m"),
+                Pair(Strings.t("score"), "$score"),
+                Pair(Strings.t("pearlsGained"), "+$runPearls"),
+                Pair("${Strings.t("best")} ${Strings.t("depth").lowercase()}", "${bestDepth.toInt()} m"),
+                Pair("${Strings.t("best")} ${Strings.t("score").lowercase()}", "$bestScore")
+            )
+            val labelX = panelCx - panelW / 2f + 30f
+            val valueX = panelCx + panelW / 2f - 30f
+            rows.forEachIndexed { i, (label, value) ->
+                val cy = box.panelTop - 28f - rowGap * i
+                font.color = Color.WHITE
+                Widgets.textLeft(batch, font, label, labelX, cy)
+                font.color = Color.GOLD
+                Widgets.textRight(batch, font, value, valueX, cy)
+            }
+            font.color = Color.WHITE
+        } else {
+            val centerY = screenHeight / 2f
+            font.color = Color.GOLD
+            val bestStr = "${Strings.t("best")}: ${bestDepth.toInt()} m   ${Strings.t("score")}: $bestScore"
+            glyphLayout.setText(font, bestStr)
+            font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f)
+            if (leaderboardMade) {
+                font.color = Color.GOLD
+                glyphLayout.setText(font, Strings.t("top5"))
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY - glyphLayout.height / 2f - 16f - lineHeight * 1.6f)
+            }
+            if (score > startBestScore) {
+                font.color = Color.GOLD
+                glyphLayout.setText(font, Strings.t("newRecord"))
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, centerY + glyphLayout.height / 2f + 16f + lineHeight * 1.6f)
+            }
+        }
+        font.color = Color.WHITE
+
+        val targets = gameOverTargets()
+        Widgets.pill(batch, font, uiPixel, targets.restart.cx, targets.restart.cy, Strings.t("restart"), scale = uiScale.factor)
+        Widgets.pill(batch, font, uiPixel, targets.menu.cx, targets.menu.cy, Strings.t("menu"), scale = uiScale.factor)
     }
 
     private fun drawBiomeBanner() {
