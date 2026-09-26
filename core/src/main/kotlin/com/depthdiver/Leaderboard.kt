@@ -43,7 +43,7 @@ interface LeaderboardService {
 
 data class LeaderboardEntry(val score: Int, val depth: Float, val muted: Boolean = false)
 
-private fun leaderboardRank(entries: List<LeaderboardEntry>, score: Int, depth: Float): Int =
+internal fun leaderboardRank(entries: List<LeaderboardEntry>, score: Int, depth: Float): Int =
     1 + entries.count { it.score > score || (it.score == score && it.depth > depth) }
 
 class LeaderboardSubmission(
@@ -84,7 +84,14 @@ object Leaderboard : LeaderboardService {
 
     private const val MAX_ENTRIES = 5
 
-    fun instance(): LeaderboardService = this
+    @Volatile
+    private var customImpl: LeaderboardService? = null
+
+    fun instance(): LeaderboardService = customImpl ?: this
+
+    fun setCustomImpl(impl: LeaderboardService?) {
+        customImpl = impl
+    }
 
     /** Test seam: lets unit tests inject an isolated in-memory [Preferences]. */
     internal var prefsOverride: Preferences? = null

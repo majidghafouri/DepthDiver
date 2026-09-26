@@ -19,6 +19,12 @@ class AndroidLauncher : AndroidApplication() {
         config.useImmersiveMode = true
         val instance = DepthDiverGame()
         game = instance
+
+        // TODO: Initialize GPGS leaderboard when play-services-games dependency is available
+        // val leaderboardId = getString(R.string.gpgs_leaderboard_id)
+        // val gpgsLeaderboard = GpgsLeaderboard(this, leaderboardId)
+        // Leaderboard.setCustomImpl(gpgsLeaderboard)
+
         initialize(instance, config)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val callback = OnBackInvokedCallback { dispatchBack() }

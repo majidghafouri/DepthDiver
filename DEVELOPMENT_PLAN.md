@@ -99,10 +99,10 @@
 ## Immediate Next Steps
 
 1. **Phase 11: Social/Retention Features**
-   - Online leaderboards (Google Play Games / Game Center)
-   - Cloud save/sync across devices
-   - Friend challenges / shareable run seeds
-   - Daily/weekly challenge notifications
+   - [x] Online leaderboards: cloud-ready interface, local-first implementation, GPGS stub
+   - [ ] Cloud save/sync across devices
+   - [ ] Friend challenges / shareable run seeds
+   - [ ] Daily/weekly challenge notifications
 
 2. **Phase 12: Platform Polish**
    - iOS build / App Store preparation

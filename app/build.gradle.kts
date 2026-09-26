@@ -95,6 +95,8 @@ dependencies {
     implementation(libs.gdx)
     implementation(libs.gdx.backend.android)
     implementation(libs.material)
+    // TODO: Add Google Play Games Services for online leaderboards
+    // implementation("com.google.android.gms:play-services-games:23.1.0")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86")
