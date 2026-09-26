@@ -25,6 +25,10 @@ class AndroidLauncher : AndroidApplication() {
         // val gpgsLeaderboard = GpgsLeaderboard(this, leaderboardId)
         // Leaderboard.setCustomImpl(gpgsLeaderboard)
 
+        // TODO: Initialize GPGS cloud save when play-services-games dependency is available
+        // val cloudSave = GpgsCloudSave(this)
+        // CloudSave.setCustomImpl(cloudSave)
+
         initialize(instance, config)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val callback = OnBackInvokedCallback { dispatchBack() }
