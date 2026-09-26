@@ -18,6 +18,8 @@ import com.badlogic.gdx.math.Rectangle
 import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
 import com.depthdiver.game.BackAction
+import com.depthdiver.simulation.PerformanceMonitor
+import com.depthdiver.simulation.FrameTimeOverlay
 import com.depthdiver.game.DifficultyCurve
 import com.depthdiver.game.FixedStepClock
 import com.depthdiver.game.GameAction
@@ -212,6 +214,11 @@ class DepthDiverGame : ApplicationAdapter() {
     private var hudPauseH = 0f
 
     private val audio = AudioManager()
+    private val performanceMonitor = PerformanceMonitor()
+    private val frameTimeOverlay = FrameTimeOverlay(
+        font = BitmapFont(),
+        glyphLayout = GlyphLayout()
+    )
 
     private var bestDepth = 0f
     private var bestScore = 0
@@ -415,6 +422,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     override fun render() {
         frameDelta = gameplayClock.frameDeltaSeconds(Gdx.graphics.deltaTime)
+        performanceMonitor.startFrame()
         menuTime += frameDelta
         if (achievementToastTimer > 0f) {
             achievementToastTimer -= frameDelta
@@ -429,6 +437,10 @@ class DepthDiverGame : ApplicationAdapter() {
         }
         if (state != GameState.PLAYING) gameplayClock.reset()
         draw()
+        val stats = performanceMonitor.endFrame()
+        if (frameTimeOverlay.isVisible()) {
+            // Frame time overlay will be drawn in draw()
+        }
     }
 
     override fun pause() {
@@ -905,6 +917,10 @@ class DepthDiverGame : ApplicationAdapter() {
                     audio.toggleMute()
                     return
                 }
+                if (Gdx.input.isKeyJustPressed(Input.Keys.F)) {
+                    frameTimeOverlay.toggle()
+                    return
+                }
                 if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
                     restartRun()
                     return
@@ -1253,6 +1269,9 @@ class DepthDiverGame : ApplicationAdapter() {
             screenCamera.update()
             batch.projectionMatrix = screenCamera.combined
             drawHud()
+            if (frameTimeOverlay.isVisible()) {
+                frameTimeOverlay.render(batch, font, performanceMonitor, screenWidth, screenHeight, state)
+            }
         } else {
             screenCamera.update()
             batch.projectionMatrix = screenCamera.combined
