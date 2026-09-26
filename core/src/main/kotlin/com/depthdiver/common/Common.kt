@@ -87,8 +87,24 @@ object Strings {
 
 data class Particle(
     var x: Float, var y: Float, var vx: Float, var vy: Float,
-    var life: Float, var maxLife: Float, var color: Color, var size: Float
-)
+    var life: Float, var maxLife: Float, var color: Color, var size: Float,
+    var trailLength: Float = 0f,
+    var fadeRate: Float = 1f,
+    var particleType: ParticleType = ParticleType.NORMAL,
+    var gravity: Float = 10f
+) {
+    var alpha: Float = 1f
+        get() = (life / maxLife) * fadeRate
+
+    enum class ParticleType {
+        NORMAL,      // Standard particle
+        TRAIL,       // Player movement trail
+        BUBBLE,      // Rising bubble
+        SPARK,       // Sharp spark
+        EXPLOSION,   // Explosion debris
+        SPLASH       // Water splash
+    }
+}
 
 const val MAX_FRAME_DELTA = 0.05f
 fun safeFrameDelta(delta: Float): Float = when {

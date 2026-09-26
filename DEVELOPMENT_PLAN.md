@@ -1,0 +1,143 @@
+# Depth Diver Development Plan
+
+## Completed Phases
+
+### Phase 1: Core Gameplay Loop ✅
+- Basic diving mechanics, hazards, pickups, oxygen system
+- Core game loop with fixed timestep
+
+### Phase 2: Meta-Progression & Run Settlement ✅
+- Profile system (pearls, upgrades, stats)
+- Run settlement with milestones, daily bonus, challenges
+- Leaderboard persistence
+- Achievement system (9 milestones)
+
+### Phase 3: Procedural Fairness ✅
+- Seeded RNG for reproducible runs
+- Safe hazard placement with player clearance
+- Reachable pickup placement
+- Low-oxygen tank forcing with cooldown
+- Eel corridor separation
+
+### Phase 4: Difficulty Curve Balance ✅
+- Scroll speed capped at 88% player speed
+- Hazard interval saturating ramp with floor
+- Depth-scaled oxygen drain (+55% at depth)
+- Fairness preserved at depth
+
+### Phase 5: Shippability / Release Build ✅
+- R8 minification + ProGuard rules
+- Signing config (keystore.properties + env vars)
+- Lint config, CI upgrades (core:check, lint, release APK)
+- Version bump to 1.1.0
+- Stray file cleanup
+
+### Phase 6: Public Types for Decomposition ✅
+- Made core types public: MoveDirection, WorldViewSpec, GameState, GameAction, BackAction
+- ProceduralFairness, DifficultyCurve, WorldGeometry types public
+- Common types public (GameState, GameAction, BackAction, GameOverAction, TouchTarget)
+
+### Phase 7: Accessibility & Settings ✅
+- Volume controls (master/sfx/music)
+- Reduce motion, high contrast, screen shake toggle
+- Settings screen with sliders/toggles
+- Android BACK handling (OnBackInvokedCallback + legacy fallback)
+- Fixed BACK-from-game-over bug
+
+### Phase 8: Localization + RTL ✅
+- Spanish (ES) locale with full translation
+- Dynamic locale switching via Profile
+- Strings object with EN/ES locales
+- Locale persisted in Profile
+
+### Phase 9: Performance Monitoring ✅
+- PerformanceMonitor: FPS, min/avg/max frame times
+- FrameTimeOverlay: real-time FPS display (toggle with F key)
+- Color-coded FPS (green/yellow/red)
+- Integrated into render loop
+
+---
+
+## Active Phase
+
+### Phase 10: Gameplay Polish & Content (IN PROGRESS)
+- [ ] Visual polish: particle effects enhancement, screen shake refinement, vignette pulse
+- [ ] Audio: more SFX variety, dynamic music layers
+- [ ] Content: new hazard types, biome variants, challenge variety
+- [ ] Boss mechanics: additional patterns, visual telegraphing
+
+### Phase 11: Social/Retention Features
+- [ ] Online leaderboards (Google Play Games / Game Center)
+- [ ] Cloud save/sync across devices
+- [ ] Friend challenges / shareable run seeds
+- [ ] Daily/weekly challenge notifications
+
+### Phase 12: Platform Polish
+- [ ] iOS build / App Store preparation
+- [ ] Web build (libGDX HTML5 backend)
+- [ ] Tablet/landscape optimizations
+- [ ] Controller/gamepad support
+
+### Phase 13: Content Pipeline
+- [ ] Level/biome editor tooling
+- [ ] Data-driven hazard/pickup definitions (JSON)
+- [ ] Procedural generation tuning parameters
+
+### Phase 14: Architecture Refactor
+- [ ] Decompose DepthDiverGame (2200+ lines) into components
+- [ ] ECS or component-based architecture
+- [ ] Dependency injection / service locator
+- [ ] Automated UI testing
+
+### Phase 15: Monetization (Optional)
+- [ ] Optional cosmetic purchases
+- [ ] Ad integration (opt-in rewarded ads)
+- [ ] Battle pass / season system
+
+---
+
+## Immediate Next Steps (Phase 10)
+
+1. **Visual Polish**
+   - Enhance particle effects (trails, explosions, bubbles)
+   - Refine screen shake (directional, intensity curves)
+   - Improve vignette pulse (low oxygen warning)
+
+2. **Audio Enhancement**
+   - Additional SFX: pickup variations, hazard impacts, UI clicks
+   - Dynamic music: layer tracks based on depth/zone
+   - Ambient sound variation per zone
+
+3. **New Content**
+   - New hazard types: moving mines, laser beams, jellyfish swarms
+   - Biome variants: thermal vents, coral gardens, shipwrecks
+   - Challenge variety: time trials, pearl collection, no-damage runs
+
+4. **Boss Mechanics**
+   - Phase transitions with visual telegraphing
+   - Multiple attack patterns per boss
+   - Environmental hazards during boss fights
+
+---
+
+## Technical Notes
+
+### Dependencies
+- libGDX 1.14.2
+- Kotlin 2.2.20
+- AGP 9.4.1
+- Gradle 8.x
+
+### Testing
+- Unit tests: 100+ (GameFlow, Profile, DifficultyCurve, ProceduralFairness, etc.)
+- Integration: manual emulator testing
+- CI: GitHub Actions (JVM tests, desktop compile, Android assembleDebug)
+
+### Performance Targets
+- 60 FPS on mid-range devices (2018+)
+- <100ms cold start
+- <50MB APK (release)
+
+---
+
+*Last updated: $(date)*

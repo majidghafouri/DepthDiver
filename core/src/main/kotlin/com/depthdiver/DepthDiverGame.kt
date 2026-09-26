@@ -15,8 +15,12 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
+import com.depthdiver.common.Particle
+import com.depthdiver.common.Particle.ParticleType
+import com.depthdiver.common.Strings
 import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
+import kotlin.ranges.ClosedFloatingPointRange
 import com.depthdiver.game.BackAction
 import com.depthdiver.simulation.PerformanceMonitor
 import com.depthdiver.simulation.FrameTimeOverlay
@@ -494,17 +498,28 @@ class DepthDiverGame : ApplicationAdapter() {
         shakeDuration = 0f
     }
 
-    private fun triggerShake(duration: Float, intensity: Float) {
+    private var shakeDirection: Float = 0f
+
+    private fun triggerShake(duration: Float, intensity: Float, direction: Float = -1f) {
         shakeDuration = duration.coerceAtLeast(0f)
         shakeTimer = shakeDuration
         shakeIntensity = intensity.coerceAtLeast(0f)
+        shakeDirection = direction.coerceIn(-MathUtils.PI, MathUtils.PI)
     }
 
-    private fun spawnParticles(x: Float, y: Float, color: Color, count: Int) {
+    private fun spawnParticles(
+        x: Float, y: Float, color: Color, count: Int,
+        type: Particle.ParticleType = Particle.ParticleType.NORMAL,
+        speedMin: Float = 3f, speedMax: Float = 9f,
+        lifeMin: Float = 0.3f, lifeMax: Float = 0.8f,
+        sizeMin: Float = 0.15f, sizeMax: Float = 0.35f,
+        fadeRate: Float = 1f,
+        gravity: Float = 10f
+    ) {
         repeat(count) {
             val angle = MathUtils.random(MathUtils.PI2)
-            val speed = MathUtils.random(3f, 9f)
-            val life = MathUtils.random(0.3f, 0.8f)
+            val speed = MathUtils.random(speedMin, speedMax)
+            val life = MathUtils.random(lifeMin, lifeMax)
             particles.add(Particle(
                 x = x,
                 y = y,
@@ -513,10 +528,87 @@ class DepthDiverGame : ApplicationAdapter() {
                 life = life,
                 maxLife = life,
                 color = Color(color),
-                size = MathUtils.random(0.15f, 0.35f)
+                size = MathUtils.random(sizeMin, sizeMax),
+                trailLength = if (type == Particle.ParticleType.TRAIL) MathUtils.random(0.5f, 1.5f) else 0f,
+                fadeRate = fadeRate,
+                particleType = type,
+                gravity = gravity
             ))
         }
     }
+
+    private fun spawnTrailParticles() {
+        if (state == GameState.PLAYING && MathUtils.randomBoolean(0.3f)) {
+            val trailColor = Color(0.3f, 0.7f, 1f, 0.6f)
+            spawnParticles(
+                x = playerX,
+                y = playerY - playerRadius,
+                color = trailColor,
+                count = 2,
+                type = Particle.ParticleType.TRAIL,
+                speedMin = 0.5f, speedMax = 2f,
+                lifeMin = 0.1f, lifeMax = 0.3f,
+                sizeMin = 0.08f, sizeMax = 0.15f,
+                fadeRate = 2f,
+                gravity = 0f
+            )
+        }
+    }
+
+    private fun spawnBubbleParticles(x: Float, y: Float) {
+        if (MathUtils.randomBoolean(0.15f)) {
+            val bubbleColor = Color(0.4f, 0.8f, 1f, 0.4f)
+            spawnParticles(
+                x = x + MathUtils.random(-0.5f, 0.5f),
+                y = y + MathUtils.random(-0.5f, 0.5f),
+                color = bubbleColor,
+                count = 1,
+                type = Particle.ParticleType.BUBBLE,
+                speedMin = 0.2f, speedMax = 0.8f,
+                lifeMin = 1f, lifeMax = 3f,
+                sizeMin = 0.1f, sizeMax = 0.25f,
+                fadeRate = 0.5f,
+                gravity = -2f
+            )
+        }
+    }
+
+    private fun spawnExplosionParticles(x: Float, y: Float, color: Color) {
+        spawnParticles(
+            x = x, y = y, color = color, count = 20,
+            type = Particle.ParticleType.EXPLOSION,
+            speedMin = 5f, speedMax = 20f,
+            lifeMin = 0.4f, lifeMax = 1f,
+            sizeMin = 0.2f, sizeMax = 0.5f,
+            fadeRate = 1.5f,
+            gravity = 15f
+        )
+    }
+
+    private fun spawnSplashParticles(x: Float, y: Float) {
+        spawnParticles(
+            x = x, y = y, color = Color(0.4f, 0.8f, 1f, 0.8f), count = 12,
+            type = Particle.ParticleType.SPLASH,
+            speedMin = 3f, speedMax = 12f,
+            lifeMin = 0.2f, lifeMax = 0.6f,
+            sizeMin = 0.1f, sizeMax = 0.3f,
+            fadeRate = 2f,
+            gravity = 8f
+        )
+    }
+
+    private fun spawnSparkParticles(x: Float, y: Float, color: Color, count: Int) {
+        spawnParticles(
+            x = x, y = y, color = color, count = count,
+            type = Particle.ParticleType.SPARK,
+            speedMin = 8f, speedMax = 25f,
+            lifeMin = 0.1f, lifeMax = 0.4f,
+            sizeMin = 0.05f, sizeMax = 0.15f,
+            fadeRate = 3f,
+            gravity = 0f
+        )
+    }
+
 
     override fun dispose() {
         batch.dispose()
@@ -574,6 +666,9 @@ class DepthDiverGame : ApplicationAdapter() {
         playerY = (playerY + direction.y * playerSpeed * delta).coerceAtMost(-playerRadius)
         depth = max(0f, -playerY)
         updateWorldCamera()
+
+        spawnTrailParticles()
+        spawnBubbleParticles(playerX, playerY - playerRadius * 2)
 
         elapsed += delta
         val diff = currentDifficulty()
@@ -640,19 +735,20 @@ class DepthDiverGame : ApplicationAdapter() {
                     shieldActive = true
                     shieldCooldown = shieldDuration(upgradeShieldLevel)
                     audio.playClick()
-                    triggerShake(0.15f, 0.4f)
+                    triggerShake(0.15f, 0.4f, MathUtils.PI) // Shield activation shakes backward
                     Gdx.input.vibrate(60)
-                    spawnParticles(playerX, playerY, Color.MAGENTA, 15)
+                    spawnExplosionParticles(playerX, playerY, Color.MAGENTA) // Shield activation explosion
+                    spawnSparkParticles(playerX, playerY, Color.WHITE, 12) // Shield sparks
                     hazardIterator.remove()
                 }
                 ShieldCollisionResult.BLOCKED -> {
-                    spawnParticles(playerX, playerY, Color.MAGENTA, 6)
+                    spawnSparkParticles(playerX, playerY, Color.MAGENTA, 8) // Block sparks
                     hazardIterator.remove()
                 }
                 ShieldCollisionResult.FATAL -> {
-                    triggerShake(0.3f, 0.6f)
+                    triggerShake(0.3f, 0.6f, MathUtils.PI) // Fatal collision shakes backward
                     Gdx.input.vibrate(100)
-                    spawnParticles(playerX, playerY, Color.RED, 12)
+                    spawnExplosionParticles(playerX, playerY, Color.RED) // Death explosion
                     endGame(RunTerminalReason.HAZARD)
                     return
                 }
@@ -666,9 +762,10 @@ class DepthDiverGame : ApplicationAdapter() {
                         fairness.noteOxygenTank(depth)
                         oxygen = (oxygen + 0.4f).coerceAtMost(maxOxygen)
                         audio.playOxygen()
-                        triggerShake(0.15f, 0.3f)
+                        triggerShake(0.15f, 0.3f, MathUtils.PI / 2) // Upward shake for oxygen
                         Gdx.input.vibrate(40)
-                        spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.CYAN, 8)
+                        spawnSplashParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f) // Water splash
+                        spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.CYAN, 12, type = Particle.ParticleType.BUBBLE) // Rising bubbles
                     }
                     is Pickup.Pearl -> {
                         combo += 1
@@ -680,9 +777,10 @@ class DepthDiverGame : ApplicationAdapter() {
                         Profile.grantPearls(pearlValue)
                         checkpointActiveRun()
                         audio.playPickup()
-                        triggerShake(0.1f, 0.2f)
+                        triggerShake(0.1f, 0.2f, -MathUtils.PI / 2) // Forward shake for pearl
                         Gdx.input.vibrate(30)
-                        spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.GOLD, 10)
+                        spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.GOLD, 15, type = Particle.ParticleType.SPARK) // Gold sparks
+                        spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color(1f, 1f, 0.8f, 1f), 8, type = Particle.ParticleType.BUBBLE) // Golden bubbles
                     }
                 }
             }
