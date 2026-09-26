@@ -79,4 +79,21 @@ class GameplaySafetyTest {
         assertEquals(GameOverAction.NONE, gameOverActionAt(150f, 50f, restart, menu))
         assertEquals(GameOverAction.NONE, gameOverActionAt(100f, 100f, restart, menu))
     }
+
+    @Test
+    fun bossWarningBeepsRampUpAsTheBossApproaches() {
+        assertEquals(1, bossCountdownStep(2.5f))
+        assertEquals(1, bossCountdownStep(1.7f))
+        assertEquals(2, bossCountdownStep(1.6f))
+        assertEquals(2, bossCountdownStep(0.9f))
+        assertEquals(3, bossCountdownStep(0.8f))
+        assertEquals(3, bossCountdownStep(0.1f))
+    }
+
+    @Test
+    fun bossWarningStepStaysInRange() {
+        assertEquals(1, bossCountdownStep(10f))
+        assertEquals(3, bossCountdownStep(0f))
+        assertEquals(3, bossCountdownStep(-5f))
+    }
 }

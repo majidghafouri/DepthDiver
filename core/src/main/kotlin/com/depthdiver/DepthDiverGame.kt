@@ -15,6 +15,7 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
+import com.depthdiver.audio.intensityFor
 import com.depthdiver.common.Particle
 import com.depthdiver.common.Particle.ParticleType
 import com.depthdiver.common.Strings
@@ -123,6 +124,13 @@ data class Particle(
 
 internal const val MAX_FRAME_DELTA = 0.05f
 
+internal const val MUSIC_DEPTH_SCALE = 220f
+
+internal const val BOSS_WARNING_STEP = 0.85f
+
+internal fun bossCountdownStep(warningRemaining: Float): Int =
+    (3 - (warningRemaining / BOSS_WARNING_STEP).toInt()).coerceIn(1, 3)
+
 internal fun safeFrameDelta(delta: Float): Float = when {
     !delta.isFinite() || delta <= 0f -> 0f
     else -> min(delta, MAX_FRAME_DELTA)
@@ -219,10 +227,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private val audio = AudioManager()
     private val performanceMonitor = PerformanceMonitor()
-    private val frameTimeOverlay = FrameTimeOverlay(
-        font = BitmapFont(),
-        glyphLayout = GlyphLayout()
-    )
+    private val frameTimeOverlay = FrameTimeOverlay()
 
     private var bestDepth = 0f
     private var bestScore = 0
@@ -262,6 +267,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private var achievementToastTimer = 0f
     private var nextMilestone = 50f
     private var bossWarning = 0f
+    private var countdownStep = 0
     private var lowOxyTick = 0f
 
     private var playerSpeed = 16f
@@ -432,7 +438,10 @@ class DepthDiverGame : ApplicationAdapter() {
             achievementToastTimer -= frameDelta
             if (achievementToastTimer <= 0f) achievementToast = null
         }
-        if (bossWarning > 0f) bossWarning -= frameDelta
+        if (bossWarning > 0f) {
+            bossWarning -= frameDelta
+            updateBossCountdown()
+        }
         handleInput()
         if (state == GameState.PLAYING) {
             gameplayClock.advance(frameDelta) { step ->
@@ -440,10 +449,25 @@ class DepthDiverGame : ApplicationAdapter() {
             }
         }
         if (state != GameState.PLAYING) gameplayClock.reset()
+        updateAudioMix(frameDelta)
         draw()
-        val stats = performanceMonitor.endFrame()
-        if (frameTimeOverlay.isVisible()) {
-            // Frame time overlay will be drawn in draw()
+        performanceMonitor.endFrame()
+    }
+
+    private fun updateBossCountdown() {
+        val step = bossCountdownStep(bossWarning)
+        if (step == countdownStep) return
+        countdownStep = step
+        audio.playCountdown(step)
+    }
+
+    private fun updateAudioMix(dt: Float) {
+        if (dt <= 0f) return
+        if (state == GameState.PLAYING) {
+            val oxygenRatio = if (maxOxygen > 0f) oxygen / maxOxygen else 1f
+            audio.updateMusic(intensityFor(depth, MUSIC_DEPTH_SCALE, oxygenRatio, bossWarning > 0f), dt)
+        } else {
+            audio.stopMusic()
         }
     }
 
@@ -689,6 +713,7 @@ class DepthDiverGame : ApplicationAdapter() {
             if (shieldCooldown <= 0f) {
                 shieldCooldown = 0f
                 shieldActive = false
+                audio.playShieldBreak()
             }
         }
 
@@ -734,7 +759,7 @@ class DepthDiverGame : ApplicationAdapter() {
                 ShieldCollisionResult.ACTIVATED -> {
                     shieldActive = true
                     shieldCooldown = shieldDuration(upgradeShieldLevel)
-                    audio.playClick()
+                    audio.playShield()
                     triggerShake(0.15f, 0.4f, MathUtils.PI) // Shield activation shakes backward
                     Gdx.input.vibrate(60)
                     spawnExplosionParticles(playerX, playerY, Color.MAGENTA) // Shield activation explosion
@@ -742,10 +767,17 @@ class DepthDiverGame : ApplicationAdapter() {
                     hazardIterator.remove()
                 }
                 ShieldCollisionResult.BLOCKED -> {
+                    if (hazard is Hazard.Shark && hazard.isBoss) {
+                        audio.playBossHit()
+                        triggerShake(0.2f, 0.5f, MathUtils.PI)
+                    } else {
+                        audio.playShieldBreak()
+                    }
                     spawnSparkParticles(playerX, playerY, Color.MAGENTA, 8) // Block sparks
                     hazardIterator.remove()
                 }
                 ShieldCollisionResult.FATAL -> {
+                    audio.playCrash()
                     triggerShake(0.3f, 0.6f, MathUtils.PI) // Fatal collision shakes backward
                     Gdx.input.vibrate(100)
                     spawnExplosionParticles(playerX, playerY, Color.RED) // Death explosion
@@ -777,6 +809,7 @@ class DepthDiverGame : ApplicationAdapter() {
                         Profile.grantPearls(pearlValue)
                         checkpointActiveRun()
                         audio.playPickup()
+                        if (combo > 2 && combo % 3 == 0) audio.playCombo(combo)
                         triggerShake(0.1f, 0.2f, -MathUtils.PI / 2) // Forward shake for pearl
                         Gdx.input.vibrate(30)
                         spawnParticles(pickup.rect.x + pickup.rect.width / 2f, pickup.rect.y + pickup.rect.height / 2f, Color.GOLD, 15, type = Particle.ParticleType.SPARK) // Gold sparks
@@ -938,6 +971,8 @@ class DepthDiverGame : ApplicationAdapter() {
                 val boss = depth > 120f && fairness.unit() < 0.06f
                 if (boss) {
                     bossWarning = 2.5f
+                    countdownStep = 0
+                    audio.playBossRoar()
                     audio.playAlarm()
                 }
                 val w = if (boss) 6.5f else 4.2f
@@ -959,6 +994,7 @@ class DepthDiverGame : ApplicationAdapter() {
         if (awardRunBonus("boss:${ledger.runId}", bonus, BonusCategory.BOSS)) {
             achievementToast = "${Strings.t("bossCleared")} +$bonus"
             achievementToastTimer = 3f
+            audio.playLevelUp()
             audio.playAchieve()
         }
     }
@@ -1368,7 +1404,7 @@ class DepthDiverGame : ApplicationAdapter() {
             batch.projectionMatrix = screenCamera.combined
             drawHud()
             if (frameTimeOverlay.isVisible()) {
-                frameTimeOverlay.render(batch, font, performanceMonitor, screenWidth, screenHeight, state)
+                frameTimeOverlay.render(batch, font, uiPixel, performanceMonitor, state)
             }
         } else {
             screenCamera.update()
@@ -2336,6 +2372,7 @@ class DepthDiverGame : ApplicationAdapter() {
         runPearls = 0
         nextMilestone = 50f
         bossWarning = 0f
+        countdownStep = 0
         hazards.clear()
         pickups.clear()
         particles.clear()

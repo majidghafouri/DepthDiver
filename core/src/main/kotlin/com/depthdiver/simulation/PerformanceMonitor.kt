@@ -1,17 +1,9 @@
 package com.depthdiver.simulation
 
-import com.badlogic.gdx.Gdx
+import kotlin.math.sqrt
 
 class PerformanceMonitor {
-    private var frameCount = 0
-    private var frameTimeSum = 0L
-    private var frameTimeMin = Long.MAX_VALUE
-    private var frameTimeMax = 0L
-    private var lastFrameTime = System.nanoTime()
-    private var frameCountSinceLastReport = 0
-    private var lastReportTime = System.currentTimeMillis()
-    private var enabled = true
-    
+
     data class FrameStats(
         val fps: Float,
         val avgFrameTimeMs: Float,
@@ -19,79 +11,85 @@ class PerformanceMonitor {
         val maxFrameTimeMs: Float,
         val frameTimeVariance: Float,
     )
-    
+
+    private val windowSamples = ArrayDeque<Long>(256)
+    private var lastFrameTime = System.nanoTime()
+    private var lastReportTime = System.currentTimeMillis()
+    private var framesThisWindow = 0
+    private var enabled = true
+    private var latest: FrameStats = FrameStats(0f, 0f, 0f, 0f, 0f)
+
     fun startFrame() {
         lastFrameTime = System.nanoTime()
     }
-    
+
     fun endFrame(): FrameStats? {
-        val now = System.nanoTime()
-        val frameTimeNs = now - lastFrameTime
-        frameTimeSum += frameTimeNs
-        frameTimeMin = minOf(frameTimeMin, frameTimeNs)
-        frameTimeMax = maxOf(frameTimeMax, frameTimeNs)
-        frameCount++
-        frameCountSinceLastReport++
-        
+        val frameTimeNs = System.nanoTime() - lastFrameTime
+        if (frameTimeNs in 0..MAX_FRAME_TIME_NS) {
+            windowSamples.addLast(frameTimeNs)
+            if (windowSamples.size > MAX_WINDOW_SAMPLES) windowSamples.removeFirst()
+        }
+        framesThisWindow++
+
         val nowMs = System.currentTimeMillis()
-        if (nowMs - lastReportTime >= 1000 && frameCountSinceLastReport > 0) {
-            val fps = frameCountSinceLastReport * 1000f / (nowMs - lastReportTime)
-            val avgMs = frameTimeSum / frameCountSinceLastReport / 1_000_000f
-            val minMs = frameTimeMin / 1_000_000f
-            val maxMs = frameTimeMax / 1_000_000f
-            val variance = calculateVariance()
-            
-            frameCountSinceLastReport = 0
-            lastReportTime = nowMs
-            frameTimeSum = 0
-            frameTimeMin = Long.MAX_VALUE
-            frameTimeMax = 0
-            
-            return FrameStats(fps, avgMs, minMs, maxMs, variance)
-        }
-        return null
+        val elapsedMs = nowMs - lastReportTime
+        if (elapsedMs < REPORT_INTERVAL_MS || framesThisWindow == 0) return null
+
+        latest = summarize(framesThisWindow, elapsedMs)
+        framesThisWindow = 0
+        lastReportTime = nowMs
+        windowSamples.clear()
+        return latest
     }
-    
-    private fun calculateVariance(): Float {
-        // Simplified variance calculation
-        if (frameCountSinceLastReport <= 1) return 0f
-        val avg = frameTimeSum.toFloat() / frameCountSinceLastReport
-        var sumSqDiff = 0f
-        // Simplified: we don't store individual frame times, so we approximate
-        return 0f
-    }
-    
-    fun getCurrentFPS(): Float {
-        val now = System.currentTimeMillis()
-        val elapsedSec = (now - lastReportTime) / 1000f
-        if (elapsedSec > 0) {
-            return frameCountSinceLastReport / elapsedSec
-        }
-        return 0f
-    }
-    
-    fun getAverageFrameTimeMs(): Float {
-        if (frameCountSinceLastReport > 0) {
-            return frameTimeSum.toFloat() / frameCountSinceLastReport / 1_000_000f
-        }
-        return 0f
-    }
-    
-    fun getMinFrameTimeMs(): Float = frameTimeMin / 1_000_000f
-    fun getMaxFrameTimeMs(): Float = frameTimeMax / 1_000_000f
-    
+
+    fun latest(): FrameStats = latest
+
     fun reset() {
-        frameCount = 0
-        frameTimeSum = 0
-        frameTimeMin = Long.MAX_VALUE
-        frameTimeMax = 0
-        frameCountSinceLastReport = 0
+        windowSamples.clear()
+        framesThisWindow = 0
+        lastFrameTime = System.nanoTime()
         lastReportTime = System.currentTimeMillis()
+        latest = FrameStats(0f, 0f, 0f, 0f, 0f)
     }
-    
+
     fun setEnabled(enabled: Boolean) {
         this.enabled = enabled
+        if (!enabled) reset()
     }
-    
+
     fun isEnabled(): Boolean = enabled
+
+    private fun summarize(frames: Int, elapsedMs: Long): FrameStats {
+        if (windowSamples.isEmpty()) {
+            return FrameStats(0f, 0f, 0f, 0f, 0f)
+        }
+        var sum = 0L
+        var minNs = Long.MAX_VALUE
+        var maxNs = 0L
+        for (sample in windowSamples) {
+            sum += sample
+            if (sample < minNs) minNs = sample
+            if (sample > maxNs) maxNs = sample
+        }
+        val count = windowSamples.size
+        val avgNs = (sum.toDouble() / count).toFloat()
+        var varianceSum = 0.0
+        for (sample in windowSamples) {
+            val diff = sample - avgNs
+            varianceSum += diff * diff
+        }
+        return FrameStats(
+            fps = frames * 1000f / elapsedMs.coerceAtLeast(1),
+            avgFrameTimeMs = avgNs / 1_000_000f,
+            minFrameTimeMs = minNs / 1_000_000f,
+            maxFrameTimeMs = maxNs / 1_000_000f,
+            frameTimeVariance = (sqrt(varianceSum / count) / 1_000_000.0).toFloat(),
+        )
+    }
+
+    private companion object {
+        const val REPORT_INTERVAL_MS = 1000L
+        const val MAX_WINDOW_SAMPLES = 512
+        const val MAX_FRAME_TIME_NS = 2_000_000_000L
+    }
 }
