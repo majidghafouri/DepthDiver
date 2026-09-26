@@ -23,6 +23,13 @@ import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
 import kotlin.ranges.ClosedFloatingPointRange
 import com.depthdiver.game.BackAction
+import com.depthdiver.game.Biome
+import com.depthdiver.game.HazardKind
+import com.depthdiver.game.WaterColor
+import com.depthdiver.game.VORTEX_PULL
+import com.depthdiver.game.clampToWorld
+import com.depthdiver.game.homingStep
+import com.depthdiver.game.vortexPush
 import com.depthdiver.simulation.PerformanceMonitor
 import com.depthdiver.simulation.FrameTimeOverlay
 import com.depthdiver.game.DifficultyCurve
@@ -128,6 +135,10 @@ internal const val MUSIC_DEPTH_SCALE = 220f
 
 internal const val BOSS_WARNING_STEP = 0.85f
 
+internal const val MAX_CURRENT_PUSH = 14f
+
+internal const val BIOME_BANNER_FADE = 0.6f
+
 internal fun bossCountdownStep(warningRemaining: Float): Int =
     (3 - (warningRemaining / BOSS_WARNING_STEP).toInt()).coerceIn(1, 3)
 
@@ -206,6 +217,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var jellyfishTex: Texture
     private lateinit var sharkTex: Texture
     private lateinit var eelTex: Texture
+    private lateinit var anglerTex: Texture
+    private lateinit var vortexTex: Texture
     private lateinit var fishTex: Texture
     private lateinit var pearlTex: Texture
     private lateinit var oxyTex: Texture
@@ -268,6 +281,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var nextMilestone = 50f
     private var bossWarning = 0f
     private var countdownStep = 0
+    private var biome: Biome = Biome.SUNLIT_SHALLOWS
+    private var biomeToastTimer = 0f
     private var lowOxyTick = 0f
 
     private var playerSpeed = 16f
@@ -404,6 +419,40 @@ class DepthDiverGame : ApplicationAdapter() {
         eelTex = Texture(eelPix)
         eelPix.dispose()
 
+        val anglerPix = Pixmap(48, 40, Pixmap.Format.RGBA8888)
+        anglerPix.setColor(0.18f, 0.16f, 0.28f, 1f)
+        anglerPix.fillCircle(20, 20, 15)
+        anglerPix.fillTriangle(6, 20, 20, 30, 20, 10)
+        anglerPix.setColor(0.32f, 0.28f, 0.45f, 1f)
+        anglerPix.fillCircle(20, 20, 9)
+        anglerPix.setColor(0.95f, 0.85f, 0.35f, 1f)
+        anglerPix.fillCircle(41, 32, 4)
+        anglerPix.setColor(0.75f, 0.95f, 1f, 1f)
+        anglerPix.fillCircle(41, 32, 2)
+        anglerPix.setColor(0.9f, 0.9f, 0.95f, 1f)
+        anglerPix.fillTriangle(18, 26, 26, 18, 26, 30)
+        anglerPix.fillTriangle(18, 14, 26, 8, 26, 20)
+        anglerPix.setColor(1f, 0.95f, 0.5f, 1f)
+        anglerPix.fillCircle(25, 20, 2)
+        anglerTex = Texture(anglerPix)
+        anglerPix.dispose()
+
+        val vortexPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
+        for (i in 0 until 3) {
+            val radius = 30 - i * 9
+            vortexPix.setColor(0.45f, 0.8f, 0.95f, 0.55f - i * 0.15f)
+            for (step in 0 until 40) {
+                val angle = step / 40f * MathUtils.PI2
+                val x = 32f + kotlin.math.cos(angle) * radius
+                val y = 32f + kotlin.math.sin(angle) * radius
+                vortexPix.fillCircle(x.toInt(), y.toInt(), 2)
+            }
+        }
+        vortexPix.setColor(0.75f, 0.95f, 1f, 0.8f)
+        vortexPix.fillCircle(32, 32, 4)
+        vortexTex = Texture(vortexPix)
+        vortexPix.dispose()
+
         val fishPix = Pixmap(28, 14, Pixmap.Format.RGBA8888)
         fishPix.setColor(0.45f, 0.75f, 0.95f, 1f)
         fishPix.fillCircle(12, 7, 5)
@@ -438,6 +487,7 @@ class DepthDiverGame : ApplicationAdapter() {
             achievementToastTimer -= frameDelta
             if (achievementToastTimer <= 0f) achievementToast = null
         }
+        if (biomeToastTimer > 0f) biomeToastTimer -= frameDelta
         if (bossWarning > 0f) {
             bossWarning -= frameDelta
             updateBossCountdown()
@@ -644,6 +694,8 @@ class DepthDiverGame : ApplicationAdapter() {
         jellyfishTex.dispose()
         sharkTex.dispose()
         eelTex.dispose()
+        anglerTex.dispose()
+        vortexTex.dispose()
         fishTex.dispose()
         pearlTex.dispose()
         oxyTex.dispose()
@@ -687,6 +739,7 @@ class DepthDiverGame : ApplicationAdapter() {
             MoveDirection.ZERO
         }
         playerX = (playerX + direction.x * playerSpeed * delta).coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
+        playerX = (playerX + currentPush() * delta).coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
         playerY = (playerY + direction.y * playerSpeed * delta).coerceAtMost(-playerRadius)
         depth = max(0f, -playerY)
         updateWorldCamera()
@@ -754,6 +807,7 @@ class DepthDiverGame : ApplicationAdapter() {
         val hazardIterator = hazards.iterator()
         while (hazardIterator.hasNext()) {
             val hazard = hazardIterator.next()
+            if (hazard is Hazard.Vortex) continue
             if (!playerRect().overlaps(hazard.rect)) continue
             when (resolveShieldCollision(upgradeShieldLevel, shieldActive, shieldCooldown)) {
                 ShieldCollisionResult.ACTIVATED -> {
@@ -851,6 +905,8 @@ class DepthDiverGame : ApplicationAdapter() {
             }
         }
 
+        updateBiome()
+
         val activeCh = Challenge.activeFor(Profile.dailyDay())
         if (!Challenge.claimedFor(activeCh) && activeCh.met(depth, runPearls, score)) {
             Challenge.claim(activeCh)
@@ -860,6 +916,25 @@ class DepthDiverGame : ApplicationAdapter() {
                 audio.playAchieve()
             }
         }
+    }
+
+    private fun updateBiome() {
+        val current = Biome.forDepth(depth)
+        if (current == biome) return
+        biome = current
+        biomeToastTimer = 3f
+        audio.playAlert()
+    }
+
+    private fun currentPush(): Float {
+        var push = 0f
+        for (hazard in hazards) {
+            if (hazard !is Hazard.Vortex) continue
+            val centerX = hazard.rect.x + hazard.rect.width / 2f
+            val centerY = hazard.rect.y + hazard.rect.height / 2f
+            push += vortexPush(playerX - centerX, playerY - centerY, hazard.radius, hazard.strength)
+        }
+        return push.coerceIn(-MAX_CURRENT_PUSH, MAX_CURRENT_PUSH)
     }
 
     private fun updateEntities(delta: Float, scrollSpeed: Float) {
@@ -888,6 +963,20 @@ class DepthDiverGame : ApplicationAdapter() {
                     hazard.rect.x += hazard.speed * hazard.dir * delta
                     hazard.rect.y = hazard.baseY - scrollSpeed * (elapsed - hazard.spawn) * 0.35f + MathUtils.sin(elapsed * 2f + hazard.phase) * 0.4f
                 }
+                is Hazard.Angler -> {
+                    hazard.rect.y -= scrollSpeed * 0.4f * delta
+                    val dx = playerX - (hazard.rect.x + hazard.rect.width / 2f)
+                    val drift = MathUtils.sin(elapsed * 0.9f + hazard.phase) * 0.4f * delta
+                    hazard.rect.x = clampToWorld(
+                        hazard.rect.x + homingStep(dx, hazard.homingSpeed, delta) + drift,
+                        hazard.rect.width / 2f,
+                        WORLD_WIDTH_METERS,
+                    )
+                }
+                is Hazard.Vortex -> {
+                    hazard.rect.y -= scrollSpeed * 0.3f * delta
+                    hazard.rect.x += MathUtils.sin(elapsed * 0.7f + hazard.phase) * 1.6f * delta
+                }
             }
             if (hazard.rect.y + hazard.rect.height < visibleBottom ||
                 hazard.rect.x + hazard.rect.width < 0f ||
@@ -915,77 +1004,138 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun spawnHazard() {
-        val roll = fairness.unit()
         val top = worldViewSpec.worldTop(worldCameraTarget)
-        when {
-            roll < 0.3f -> {
-                hazards.add(Hazard.Rock(Rectangle(-1.2f, top + 2f, 4.8f, 6f), 0f))
-                hazards.add(Hazard.Rock(Rectangle(WORLD_WIDTH_METERS - 3.6f, top + 2f, 4.8f, 6f), 0f))
-                fairness.recordHazard(1.2f, 4.8f)
-                fairness.recordHazard(WORLD_WIDTH_METERS - 1.2f, 4.8f)
-            }
-            depth > 45f && roll < 0.45f -> {
-                val width = 7.5f
-                val eel = fairness.eelSpawn(
-                    playerXMeters = playerX,
-                    playerYMeters = playerY,
-                    widthMeters = width,
-                    topYMeters = top,
-                    bandOffsetMinimum = 0.5f,
-                    bandOffsetMaximum = 6.5f,
-                    minBandGapMeters = 3f,
-                    minPlayerGapMeters = 2.5f,
-                    minReactionSeconds = 1.6f,
-                    baseSpeedMetersPerSecond = 7.5f,
-                    depthMeters = depth,
-                )
-                hazards.add(
-                    Hazard.Eel(
-                        Rectangle(eel.startXMeters, eel.baseYMeters, width, 1.7f),
-                        eel.dir,
-                        fairness.range(0f, MathUtils.PI2),
-                        eel.baseYMeters,
-                        elapsed,
-                        eel.speedMetersPerSecond
-                    )
-                )
-            }
-            depth > 35f && roll < 0.65f -> {
-                val width = 3f
-                val center = fairness.hazardCenter(playerX, width, depth).centerXMeters
-                hazards.add(
-                    Hazard.Jellyfish(
-                        Rectangle(center - width / 2f, top + 3f, width, width),
-                        fairness.range(0f, MathUtils.PI2),
-                        fairness.range(1.25f, 2.25f),
-                        center
-                    )
-                )
-            }
-            depth > 18f && roll < 0.85f -> {
-                val width = 2.4f
-                val center = fairness.hazardCenter(playerX, width, depth).centerXMeters
-                hazards.add(Hazard.Mine(Rectangle(center - width / 2f, top + 2.4f, width, width), fairness.range(0f, MathUtils.PI2)))
-            }
-            depth > 80f && roll < 0.97f -> {
-                val boss = depth > 120f && fairness.unit() < 0.06f
-                if (boss) {
-                    bossWarning = 2.5f
-                    countdownStep = 0
-                    audio.playBossRoar()
-                    audio.playAlarm()
-                }
-                val w = if (boss) 6.5f else 4.2f
-                val h = if (boss) 2.3f else 1.5f
-                val center = fairness.hazardCenter(playerX, w, depth).centerXMeters
-                hazards.add(Hazard.Shark(Rectangle(center - w / 2f, top + 3f, w, h), 0f, boss))
-            }
-            else -> {
-                val size = fairness.range(2.25f, 4.25f)
-                val center = fairness.hazardCenter(playerX, size, depth).centerXMeters
-                hazards.add(Hazard.Rock(Rectangle(center - size / 2f, top + 4f, size, size), fairness.range(0f, MathUtils.PI2)))
-            }
+        if (spawnRockGates()) return
+        if (spawnEel(top)) return
+        if (spawnBossShark(top)) return
+
+        when (Biome.roll(biome.hazardMix, fairness.unit())) {
+            HazardKind.JELLYFISH -> spawnJellyfish(top)
+            HazardKind.MINE -> spawnMine(top)
+            HazardKind.ANGLER -> spawnAngler(top)
+            HazardKind.VORTEX -> spawnVortex(top)
+            else -> spawnRock(top)
         }
+    }
+
+    private fun spawnRockGates(): Boolean {
+        if (fairness.unit() >= 0.3f) return false
+        hazards.add(Hazard.Rock(Rectangle(-1.2f, worldViewSpec.worldTop(worldCameraTarget) + 2f, 4.8f, 6f), 0f))
+        hazards.add(Hazard.Rock(Rectangle(WORLD_WIDTH_METERS - 3.6f, worldViewSpec.worldTop(worldCameraTarget) + 2f, 4.8f, 6f), 0f))
+        fairness.recordHazard(1.2f, 4.8f)
+        fairness.recordHazard(WORLD_WIDTH_METERS - 1.2f, 4.8f)
+        return true
+    }
+
+    private fun spawnEel(top: Float): Boolean {
+        if (depth <= 45f || fairness.unit() >= 0.45f) return false
+        val width = 7.5f
+        val eel = fairness.eelSpawn(
+            playerXMeters = playerX,
+            playerYMeters = playerY,
+            widthMeters = width,
+            topYMeters = top,
+            bandOffsetMinimum = 0.5f,
+            bandOffsetMaximum = 6.5f,
+            minBandGapMeters = 3f,
+            minPlayerGapMeters = 2.5f,
+            minReactionSeconds = 1.6f,
+            baseSpeedMetersPerSecond = 7.5f,
+            depthMeters = depth,
+        )
+        hazards.add(
+            Hazard.Eel(
+                Rectangle(eel.startXMeters, eel.baseYMeters, width, 1.7f),
+                eel.dir,
+                fairness.range(0f, MathUtils.PI2),
+                eel.baseYMeters,
+                elapsed,
+                eel.speedMetersPerSecond
+            )
+        )
+        return true
+    }
+
+    private fun spawnBossShark(top: Float): Boolean {
+        if (depth <= 80f || fairness.unit() >= 0.97f) return false
+        val boss = depth > 120f && fairness.unit() < 0.06f
+        if (boss) {
+            bossWarning = 2.5f
+            countdownStep = 0
+            audio.playBossRoar()
+            audio.playAlarm()
+        }
+        val w = if (boss) 6.5f else 4.2f
+        val h = if (boss) 2.3f else 1.5f
+        val center = fairness.hazardCenter(playerX, w, depth).centerXMeters
+        hazards.add(Hazard.Shark(Rectangle(center - w / 2f, top + 3f, w, h), 0f, boss))
+        return true
+    }
+
+    private fun spawnJellyfish(top: Float) {
+        if (depth < 35f) {
+            spawnRock(top)
+            return
+        }
+        val width = 3f
+        val center = fairness.hazardCenter(playerX, width, depth).centerXMeters
+        hazards.add(
+            Hazard.Jellyfish(
+                Rectangle(center - width / 2f, top + 3f, width, width),
+                fairness.range(0f, MathUtils.PI2),
+                fairness.range(1.25f, 2.25f),
+                center
+            )
+        )
+    }
+
+    private fun spawnMine(top: Float) {
+        if (depth < 18f) {
+            spawnRock(top)
+            return
+        }
+        val width = 2.4f
+        val center = fairness.hazardCenter(playerX, width, depth).centerXMeters
+        hazards.add(Hazard.Mine(Rectangle(center - width / 2f, top + 2.4f, width, width), fairness.range(0f, MathUtils.PI2)))
+    }
+
+    private fun spawnAngler(top: Float) {
+        if (depth < 55f) {
+            spawnJellyfish(top)
+            return
+        }
+        val width = 3.4f
+        val center = fairness.hazardCenter(playerX, width, depth).centerXMeters
+        hazards.add(
+            Hazard.Angler(
+                Rectangle(center - width / 2f, top + 3f, width, width * 0.75f),
+                fairness.range(0f, MathUtils.PI2),
+                homingSpeed = fairness.range(1.1f, 2.2f)
+            )
+        )
+    }
+
+    private fun spawnVortex(top: Float) {
+        if (depth < 120f) {
+            spawnAngler(top)
+            return
+        }
+        val radius = fairness.range(4.5f, 7f)
+        val center = clampToWorld(fairness.range(2f, WORLD_WIDTH_METERS - 2f), radius, WORLD_WIDTH_METERS)
+        hazards.add(
+            Hazard.Vortex(
+                Rectangle(center - 1.5f, top + 4f, 3f, 3f),
+                fairness.range(0f, MathUtils.PI2),
+                radius,
+                strength = VORTEX_PULL * fairness.range(0.7f, 1.1f)
+            )
+        )
+    }
+
+    private fun spawnRock(top: Float) {
+        val size = fairness.range(2.25f, 4.25f)
+        val center = fairness.hazardCenter(playerX, size, depth).centerXMeters
+        hazards.add(Hazard.Rock(Rectangle(center - size / 2f, top + 4f, size, size), fairness.range(0f, MathUtils.PI2)))
     }
 
     private fun onBossEscaped() {
@@ -1495,6 +1645,27 @@ class DepthDiverGame : ApplicationAdapter() {
                     } else {
                         batch.draw(eelTex, hazard.rect.x + hazard.rect.width, hazard.rect.y, -hazard.rect.width, hazard.rect.height)
                     }
+                is Hazard.Angler -> {
+                    batch.draw(anglerTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                    val pulse = 0.35f + 0.25f * MathUtils.sin(elapsed * 3f + hazard.phase)
+                    batch.setColor(1f, 0.9f, 0.5f, pulse)
+                    val lureX = hazard.rect.x + hazard.rect.width * 0.85f
+                    val lureY = hazard.rect.y + hazard.rect.height * 0.8f
+                    batch.draw(uiPixel, lureX - 0.3f, lureY - 0.3f, 0.6f, 0.6f)
+                }
+                is Hazard.Vortex -> {
+                    val centerX = hazard.rect.x + hazard.rect.width / 2f
+                    val centerY = hazard.rect.y + hazard.rect.height / 2f
+                    val spin = 1f + 0.08f * MathUtils.sin(elapsed * 2.5f + hazard.phase)
+                    batch.setColor(1f, 1f, 1f, 0.55f)
+                    batch.draw(
+                        vortexTex,
+                        centerX - hazard.radius * spin,
+                        centerY - hazard.radius * spin,
+                        hazard.radius * 2f * spin,
+                        hazard.radius * 2f * spin
+                    )
+                }
             }
             batch.setColor(1f, 1f, 1f, 1f)
         }
@@ -1519,43 +1690,20 @@ class DepthDiverGame : ApplicationAdapter() {
         }
     }
 
-    private fun zoneAt(depth: Float): Int = when {
-        depth < WORLD_WIDTH_METERS -> 0
-        depth < 120f -> 1
-        depth < 300f -> 2
-        else -> 3
-    }
-
-    private fun zoneKey(zone: Int): String = when (zone) {
-        0 -> "zoneSunlit"
-        1 -> "zoneReef"
-        2 -> "zoneMidnight"
-        else -> "zoneAbyss"
+    private fun waterColor(): WaterColor {
+        val current = Biome.forDepth(depth)
+        val progress = Biome.progressWithin(depth, current)
+        return current.blendTo(Biome.nextOf(current), progress)
     }
 
     private fun drawWorldBackground() {
-        val palettes = arrayOf(
-            floatArrayOf(0.05f, 0.30f, 0.46f, 0.02f, 0.13f, 0.28f),
-            floatArrayOf(0.02f, 0.22f, 0.40f, 0.008f, 0.09f, 0.20f),
-            floatArrayOf(0.008f, 0.12f, 0.19f, 0.003f, 0.04f, 0.085f),
-            floatArrayOf(0.005f, 0.055f, 0.085f, 0.002f, 0.012f, 0.03f)
-        )
-        val z = zoneAt(depth)
-        val p = when (z) {
-            0 -> (depth / WORLD_WIDTH_METERS).coerceIn(0f, 1f)
-            1 -> ((depth - WORLD_WIDTH_METERS) / (WORLD_WIDTH_METERS * 2f)).coerceIn(0f, 1f)
-            2 -> ((depth - 120f) / 180f).coerceIn(0f, 1f)
-            else -> 0f
-        }
-        val a = palettes[z]
-        val b = palettes[if (z >= 3) z else z + 1]
-        fun lerp(ai: Int, bi: Int) = a[ai] + (b[bi] - a[ai]) * p
-        val topR = lerp(0, 0)
-        val topG = lerp(1, 1)
-        val topB = lerp(2, 2)
-        val botR = lerp(3, 3)
-        val botG = lerp(4, 4)
-        val botB = lerp(5, 5)
+        val water = waterColor()
+        val topR = water.topRed
+        val topG = water.topGreen
+        val topB = water.topBlue
+        val botR = water.bottomRed
+        val botG = water.bottomGreen
+        val botB = water.bottomBlue
 
         val visibleCamera = worldCameraTarget
         val backgroundMargin = 1f
@@ -1986,7 +2134,7 @@ class DepthDiverGame : ApplicationAdapter() {
         var y = screenHeight - lineHeight - padding
 
         font.color = Color(0.6f, 0.85f, 1f, 0.9f)
-        glyphLayout.setText(font, Strings.t(zoneKey(zoneAt(depth))))
+        glyphLayout.setText(font, Strings.t(biome.nameKey))
         font.draw(batch, glyphLayout, screenWidth / 2f - glyphLayout.width / 2f, y)
         font.color = Color.WHITE
 
@@ -2139,7 +2287,23 @@ class DepthDiverGame : ApplicationAdapter() {
             Widgets.pill(batch, font, uiPixel, targets.restart.cx, targets.restart.cy, Strings.t("restart"))
             Widgets.pill(batch, font, uiPixel, targets.menu.cx, targets.menu.cy, Strings.t("menu"))
         }
+        if (biomeToastTimer > 0f) drawBiomeBanner()
         if (achievementToastTimer > 0f) drawAchievementToast()
+    }
+
+    private fun drawBiomeBanner() {
+        val alpha = (biomeToastTimer / BIOME_BANNER_FADE).coerceIn(0f, 1f)
+        val label = Strings.t(biome.nameKey)
+        val layout = GlyphLayout(font, label)
+        val centerY = screenHeight * 0.32f
+        val w = layout.width + 56f
+        val h = layout.height + 22f
+        batch.setColor(0f, 0f, 0f, 0.45f * alpha)
+        batch.draw(uiPixel, screenWidth / 2f - w / 2f, centerY - h / 2f, w, h)
+        batch.setColor(1f, 1f, 1f, 1f)
+        font.color = Color(0.6f, 0.9f, 1f, alpha)
+        font.draw(batch, label, screenWidth / 2f - layout.width / 2f, centerY - (layout.height - font.capHeight) / 2f)
+        font.color = Color.WHITE
     }
 
     private fun drawAchievementToast() {
@@ -2373,6 +2537,8 @@ class DepthDiverGame : ApplicationAdapter() {
         nextMilestone = 50f
         bossWarning = 0f
         countdownStep = 0
+        biome = Biome.forDepth(0f)
+        biomeToastTimer = 0f
         hazards.clear()
         pickups.clear()
         particles.clear()

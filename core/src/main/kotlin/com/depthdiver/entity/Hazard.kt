@@ -28,4 +28,19 @@ sealed class Hazard {
         val spawn: Float,
         val speed: Float = 7.5f
     ) : Hazard()
+
+    /** Slow, telegraphed hunter that closes in horizontally but never faster than [homingSpeed]. */
+    class Angler(
+        override val rect: Rectangle,
+        val phase: Float,
+        val homingSpeed: Float
+    ) : Hazard()
+
+    /** Non-lethal current that shoves the player sideways; the swirl itself is safe to cross. */
+    class Vortex(
+        override val rect: Rectangle,
+        val phase: Float,
+        val radius: Float,
+        val strength: Float = 9f
+    ) : Hazard()
 }

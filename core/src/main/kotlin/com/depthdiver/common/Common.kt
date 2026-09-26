@@ -36,6 +36,7 @@ object Strings {
         "chScore" to "CHALLENGE: SCORE", "chDone" to "CHALLENGE: COMPLETE TODAY",
         "zoneSunlit" to "SUNLIT COAST", "zoneReef" to "TURQUOISE REEF",
         "zoneMidnight" to "MIDNIGHT ZONE", "zoneAbyss" to "ABYSS",
+        "zoneHadal" to "HADAL TRENCH",
         // Settings
         "settings" to "SETTINGS", "masterVolume" to "MASTER VOLUME", "sfxVolume" to "SFX VOLUME",
         "musicVolume" to "MUSIC VOLUME", "reduceMotion" to "REDUCE MOTION",
@@ -66,6 +67,7 @@ object Strings {
         "chScore" to "RETO: PUNTUACIÓN", "chDone" to "RETO: COMPLETADO HOY",
         "zoneSunlit" to "COSTA SOLEADA", "zoneReef" to "ARRECIFE TURQUESA",
         "zoneMidnight" to "ZONA MEDIANOCHE", "zoneAbyss" to "ABISMO",
+        "zoneHadal" to "FOSA HADAL",
         // Settings
         "settings" to "AJUSTES", "masterVolume" to "VOLUMEN MAESTRO", "sfxVolume" to "VOLUMEN EFECTOS",
         "musicVolume" to "VOLUMEN MÚSICA", "reduceMotion" to "REDUCIR MOVIMIENTO",

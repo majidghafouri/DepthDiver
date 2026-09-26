@@ -61,9 +61,9 @@
 ## Active Phase
 
 ### Phase 10: Gameplay Polish & Content (IN PROGRESS)
-- [ ] Visual polish: particle effects enhancement, screen shake refinement, vignette pulse
-- [ ] Audio: more SFX variety, dynamic music layers
-- [ ] Content: new hazard types, biome variants, challenge variety
+- [x] Visual polish: particle effects enhancement, screen shake refinement, vignette pulse (`2b3edbf`)
+- [x] Audio: more SFX variety, dynamic music layers (`ea23789`)
+- [x] Content: new hazard types (angler, vortex), five biomes with blended water color and hazard mixes
 - [ ] Boss mechanics: additional patterns, visual telegraphing
 
 ### Phase 11: Social/Retention Features
@@ -98,20 +98,14 @@
 
 ## Immediate Next Steps (Phase 10)
 
-1. **Visual Polish**
-   - Enhance particle effects (trails, explosions, bubbles)
-   - Refine screen shake (directional, intensity curves)
-   - Improve vignette pulse (low oxygen warning)
+1. **Boss Mechanics**
+   - Telegraphed attack wind-ups before the boss crosses the screen
+   - Additional boss patterns (dive, sweep, charge)
+   - Boss health/damage feedback loop
 
-2. **Audio Enhancement**
-   - Additional SFX: pickup variations, hazard impacts, UI clicks
-   - Dynamic music: layer tracks based on depth/zone
-   - Ambient sound variation per zone
-
-3. **New Content**
-   - New hazard types: moving mines, laser beams, jellyfish swarms
-   - Biome variants: thermal vents, coral gardens, shipwrecks
-   - Challenge variety: time trials, pearl collection, no-damage runs
+2. **Remaining Content Ideas**
+   - Pickup variants and challenge rules (time trials, no-damage runs)
+   - Per-biome hazard set dressing
 
 4. **Boss Mechanics**
    - Phase transitions with visual telegraphing
