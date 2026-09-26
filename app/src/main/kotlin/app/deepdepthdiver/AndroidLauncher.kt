@@ -30,12 +30,12 @@ class AndroidLauncher : AndroidApplication() {
         // val cloudSave = GpgsCloudSave(this)
         // CloudSave.setCustomImpl(cloudSave)
 
-        // Initialize notifications
-        notificationManager = ChallengeNotificationManager(this)
-        notificationManager?.scheduleDailyChallenge()
-        notificationManager?.scheduleWeeklyChallenge()
-
         initialize(instance, config)
+
+        // Notifications read profile state through libGDX Preferences, so this
+        // must run after initialize() has published Gdx.app.
+        scheduleChallengeNotifications()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val callback = OnBackInvokedCallback { dispatchBack() }
             backCallback = callback
@@ -44,6 +44,21 @@ class AndroidLauncher : AndroidApplication() {
                 callback
             )
         }
+    }
+
+    private fun scheduleChallengeNotifications() {
+        if (!hasNotificationPermission()) return
+        runCatching {
+            notificationManager = ChallengeNotificationManager(this)
+            notificationManager?.scheduleDailyChallenge()
+            notificationManager?.scheduleWeeklyChallenge()
+        }
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     @Deprecated("Handled by OnBackInvokedCallback where predictive back is active")

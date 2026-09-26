@@ -24,6 +24,11 @@ import com.depthdiver.entity.Pickup
 import kotlin.ranges.ClosedFloatingPointRange
 import com.depthdiver.game.BackAction
 import com.depthdiver.game.Biome
+import com.depthdiver.game.GamepadBridge
+import com.depthdiver.game.GamepadState
+import com.depthdiver.game.PadAction
+import com.depthdiver.game.gamepadActions
+import com.depthdiver.game.gamepadDirection
 import com.depthdiver.game.HazardKind
 import com.depthdiver.game.WaterColor
 import com.depthdiver.game.VORTEX_PULL
@@ -239,6 +244,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var hudPauseH = 0f
 
     private val audio = AudioManager()
+    private var padState = GamepadState()
+    private var padPrevious = GamepadState()
     private val performanceMonitor = PerformanceMonitor()
     private val frameTimeOverlay = FrameTimeOverlay()
 
@@ -494,6 +501,7 @@ class DepthDiverGame : ApplicationAdapter() {
             bossWarning -= frameDelta
             updateBossCountdown()
         }
+        pollGamepad()
         handleInput()
         if (state == GameState.PLAYING) {
             gameplayClock.advance(frameDelta) { step ->
@@ -504,6 +512,50 @@ class DepthDiverGame : ApplicationAdapter() {
         updateAudioMix(frameDelta)
         draw()
         performanceMonitor.endFrame()
+    }
+
+    private fun pollGamepad() {
+        padPrevious = padState
+        padState = GamepadBridge.poll() ?: GamepadState()
+    }
+
+    /** @return true when the action was consumed and input handling should stop. */
+    private fun applyGamepadAction(action: PadAction): Boolean {
+        when (action) {
+            PadAction.PAUSE, PadAction.CANCEL -> {
+                if (!handleSystemBack()) Gdx.app.exit()
+                return true
+            }
+            PadAction.RESTART -> {
+                restartRun()
+                return true
+            }
+            PadAction.FRAME_STATS -> {
+                frameTimeOverlay.toggle()
+                return true
+            }
+            PadAction.MUTE -> {
+                audio.toggleMute()
+                audio.playClick()
+                return true
+            }
+            PadAction.RESUME -> {
+                if (state == GameState.PAUSED) {
+                    resumeGame()
+                    return true
+                }
+            }
+            PadAction.CONFIRM -> {
+                when (state) {
+                    GameState.GAME_OVER, GameState.PAUSED -> {
+                        restartRun()
+                        return true
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        return false
     }
 
     private fun updateBossCountdown() {
@@ -902,24 +954,27 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun fixedUpdate(delta: Float) {
         if (state != GameState.PLAYING) return
         val ledger = activeRun ?: return
+
+        val gamepadDir = gamepadDirection(padState)
+
         val keyboardDirection = inputDirection(
             left = Gdx.input.isKeyPressed(Input.Keys.LEFT) || Gdx.input.isKeyPressed(Input.Keys.A),
             right = Gdx.input.isKeyPressed(Input.Keys.RIGHT) || Gdx.input.isKeyPressed(Input.Keys.D),
             up = Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W),
             down = Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S),
         )
-        val direction = if (!keyboardDirection.isZero) {
-            keyboardDirection
-        } else if (Gdx.input.isTouched()) {
-            worldViewSpec.touchDirection(
+
+        val direction = when {
+            !gamepadDir.isZero -> gamepadDir
+            !keyboardDirection.isZero -> keyboardDirection
+            Gdx.input.isTouched() -> worldViewSpec.touchDirection(
                 playerXMeters = playerX,
                 playerYMeters = playerY,
                 screenX = Gdx.input.x.toFloat(),
                 screenYFromTop = Gdx.input.y.toFloat(),
                 camera = worldCameraTarget,
             )
-        } else {
-            MoveDirection.ZERO
+            else -> MoveDirection.ZERO
         }
         playerX = (playerX + direction.x * playerSpeed * delta).coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
         playerX = (playerX + currentPush() * delta).coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
@@ -1385,6 +1440,10 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun handleInput() {
+        for (action in gamepadActions(padState, padPrevious)) {
+            if (!applyGamepadAction(action)) return
+        }
+
         val escJust = Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)
         val pJust = Gdx.input.isKeyJustPressed(Input.Keys.P)
         val mJust = Gdx.input.isKeyJustPressed(Input.Keys.M)

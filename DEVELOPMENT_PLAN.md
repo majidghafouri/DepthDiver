@@ -105,10 +105,10 @@
    - [x] Daily/weekly challenge notifications: notification channel, daily/weekly scheduling, challenge summary in notification
 
 2. **Phase 12: Platform Polish**
-   - iOS build / App Store preparation
-   - Web build (libGDX HTML5 backend)
-   - Tablet/landscape optimizations
-   - Controller/gamepad support
+   - [x] Controller/gamepad support: pure input mapping + optional runtime bridge
+   - [ ] Tablet/landscape optimizations (UI scale, touch targets)
+   - [ ] Web build (libGDX HTML5 backend) — blocked: gdx-backend-gwt needs GWT artifacts
+   - [ ] iOS build preparation (docs/config)
 
 4. **Boss Mechanics**
    - Phase transitions with visual telegraphing

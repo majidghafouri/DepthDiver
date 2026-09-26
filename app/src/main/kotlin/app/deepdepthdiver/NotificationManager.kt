@@ -40,7 +40,7 @@ class ChallengeNotificationManager(private val context: Context) {
         val next = nextDailyTime()
         val delay = next - System.currentTimeMillis()
         if (delay > 0) {
-            scheduleNotification(delay, NOTIFICATION_ID_DAILY, getDailyContent())
+            scheduleNotification(delay, NOTIFICATION_ID_DAILY, dailyContent())
         }
     }
 
@@ -50,6 +50,23 @@ class ChallengeNotificationManager(private val context: Context) {
         val delay = next - System.currentTimeMillis()
         if (delay > 0) {
             scheduleNotification(delay, NOTIFICATION_ID_WEEKLY, getWeeklyContent())
+        }
+    }
+
+    /**
+     * Challenge copy needs libGDX Preferences, which are only available once
+     * the backend has published `Gdx.app`. Returns a neutral fallback instead
+     * of throwing if scheduling is attempted too early.
+     */
+    private fun dailyContent(): Pair<String, String> {
+        val fallbackTitle = "${Strings.t("dailyChallenge")} Available!"
+        return try {
+            val day = (System.currentTimeMillis() / 86_400_000L).toInt()
+            val active = Challenge.activeFor(day)
+            fallbackTitle to "${active.summary(Profile.bestDepth(), Profile.bestRunPearls(), Profile.bestScore())}" +
+                " - ${Strings.t("reward")} ${Challenge.REWARD} ${Strings.t("pearls")}"
+        } catch (_: Exception) {
+            fallbackTitle to ""
         }
     }
 
@@ -78,15 +95,6 @@ class ChallengeNotificationManager(private val context: Context) {
             cal.add(Calendar.WEEK_OF_YEAR, 1)
         }
         return cal.timeInMillis
-    }
-
-    private fun getDailyContent(): Pair<String, String> {
-        val day = (System.currentTimeMillis() / 86_400_000L).toInt()
-        val active = Challenge.activeFor(day)
-        return Pair(
-            "${Strings.t("dailyChallenge")} Available!",
-            "${active.summary(Profile.bestDepth(), Profile.bestRunPearls(), Profile.bestScore())} - ${Strings.t("reward")} ${Challenge.REWARD} ${Strings.t("pearls")}"
-        )
     }
 
     private fun getWeeklyContent(): Pair<String, String> {
