@@ -25,6 +25,7 @@ import kotlin.ranges.ClosedFloatingPointRange
 import com.depthdiver.game.BackAction
 import com.depthdiver.game.Biome
 import com.depthdiver.game.GamepadBridge
+import com.depthdiver.game.UiScale
 import com.depthdiver.game.GamepadState
 import com.depthdiver.game.PadAction
 import com.depthdiver.game.gamepadActions
@@ -298,6 +299,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private val playerRadius = PLAYER_RADIUS_METERS
     private var screenWidth = 800f
     private var screenHeight = 600f
+    private var uiScale = UiScale(1f, UiScale.MIN_TOUCH_PX)
     private var worldViewSpec = WorldViewSpec(screenWidth, screenHeight)
     private var worldCameraTarget = worldViewSpec.cameraFor(INITIAL_PLAYER_X_METERS, INITIAL_PLAYER_Y_METERS)
     private var menuFbo: FrameBuffer? = null
@@ -307,7 +309,7 @@ class DepthDiverGame : ApplicationAdapter() {
         resize(Gdx.graphics.width, Gdx.graphics.height)
         val generator = FreeTypeFontGenerator(Gdx.files.internal("fonts/OpenSans-Regular.ttf"))
         val parameter = FreeTypeFontGenerator.FreeTypeFontParameter().apply {
-            size = (screenHeight / 30f).toInt().coerceIn(16, 48)
+            size = (screenHeight / 30f * uiScale.factor).toInt().coerceIn(16, 64)
             color = Color.WHITE
             borderWidth = 1f
             borderColor = Color.BLACK
@@ -316,7 +318,7 @@ class DepthDiverGame : ApplicationAdapter() {
         font = generator.generateFont(parameter)
         titleFont = generator.generateFont(
             FreeTypeFontGenerator.FreeTypeFontParameter().apply {
-                size = (screenHeight / 9f).toInt().coerceIn(36, 84)
+                size = (screenHeight / 9f * uiScale.factor).toInt().coerceIn(36, 120)
                 color = Color(0.35f, 0.85f, 1f, 1f)
                 borderWidth = 2f
                 borderColor = Color(0.02f, 0.2f, 0.4f, 1f)
@@ -479,8 +481,9 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     override fun resize(width: Int, height: Int) {
-        screenWidth = width.toFloat().coerceAtLeast(1f)
-        screenHeight = height.toFloat().coerceAtLeast(1f)
+        screenWidth = width.coerceAtLeast(1).toFloat()
+        screenHeight = height.coerceAtLeast(1).toFloat()
+        uiScale = UiScale.forScreen(screenWidth, screenHeight)
         screenCamera.setToOrtho(false, screenWidth, screenHeight)
         screenCamera.update()
         worldViewSpec = WorldViewSpec(screenWidth, screenHeight)
@@ -1548,8 +1551,11 @@ class DepthDiverGame : ApplicationAdapter() {
 
     /** 2-column button grid used by the main menu. */
     private fun menuGridPos(i: Int): Pair<Float, Float> {
-        val rows = (menuLabels().size + 1) / 2
-        val gap = min(72f, screenHeight * 0.115f)
+        // Row gap used to be capped at a flat 72px, which made buttons crowd
+        // together on phones and stay tiny on tablets. Scale with the viewport
+        // and let the pill height set the floor so rows never overlap.
+        val rowHeight = Widgets.pillH(font, "W", uiScale.factor)
+        val gap = maxOf(uiScale.gap(72f), rowHeight + uiScale.gap(10f))
         val startY = screenHeight * 0.64f
         val row = i / 2
         val col = i % 2
@@ -1559,10 +1565,10 @@ class DepthDiverGame : ApplicationAdapter() {
 
     /** EASY / NORMAL / HARD segmented controls, well clear of gesture bars. */
     private fun difficultySegs(): Array<FloatArray> {
-        val w = max(196f, Widgets.pillW(font, Strings.t("normal")) + 10f)
-        val h = Widgets.pillH(font, Strings.t("normal"))
+        val w = maxOf(uiScale.px(196f), Widgets.pillW(font, Strings.t("normal"), uiScale.factor) + uiScale.px(10f))
+        val h = Widgets.pillH(font, Strings.t("normal"), uiScale.factor)
         val cy = screenHeight * 0.10f
-        val gap = w + 18f
+        val gap = w + uiScale.px(18f)
         return arrayOf(
             floatArrayOf(screenWidth / 2f - gap, cy, w, h, 0f),
             floatArrayOf(screenWidth / 2f, cy, w, h, 1f),
@@ -1584,7 +1590,13 @@ class DepthDiverGame : ApplicationAdapter() {
         val labels = menuLabels()
         for (i in labels.indices) {
             val (cx, cy) = menuGridPos(i)
-            if (Widgets.contains(tx, ty, cx, cy, Widgets.pillW(font, labels[i]), Widgets.pillH(font, labels[i]))) {
+            if (Widgets.containsTouch(
+                    tx, ty, cx, cy,
+                    Widgets.pillW(font, labels[i], uiScale.factor),
+                    Widgets.pillH(font, labels[i], uiScale.factor),
+                    uiScale.minTouchPx,
+                )
+            ) {
                 engage(i)
                 return
             }
@@ -1790,12 +1802,13 @@ class DepthDiverGame : ApplicationAdapter() {
             audio.playClick()
             return
         }
-        if (Widgets.contains(tx, ty, centerX - 90f, centerY + r.side, Widgets.pillW(font, Strings.t("restart")), Widgets.pillH(font, Strings.t("restart")))) {
+        val sideOffset = sideButtonOffset()
+        if (Widgets.containsTouch(tx, ty, centerX - sideOffset, centerY + r.side, Widgets.pillW(font, Strings.t("restart"), uiScale.factor), Widgets.pillH(font, Strings.t("restart"), uiScale.factor), uiScale.minTouchPx)) {
             restartRun()
             audio.playClick()
             return
         }
-        if (Widgets.contains(tx, ty, centerX + 90f, centerY + r.side, Widgets.pillW(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")), Widgets.pillH(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff")))) {
+        if (Widgets.containsTouch(tx, ty, centerX + sideOffset, centerY + r.side, Widgets.pillW(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"), uiScale.factor), Widgets.pillH(font, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"), uiScale.factor), uiScale.minTouchPx)) {
             audio.toggleMute()
             audio.playClick()
             return
@@ -1813,11 +1826,11 @@ class DepthDiverGame : ApplicationAdapter() {
         if (tall) {
             val oxyLabel = shopBuyLabel(Profile.Upgrade.Oxygen)
             val spdLabel = shopBuyLabel(Profile.Upgrade.Speed)
-            if (Widgets.contains(tx, ty, centerX - 90f, centerY + r.buy, Widgets.pillW(font, oxyLabel), Widgets.pillH(font, oxyLabel))) {
+            if (Widgets.containsTouch(tx, ty, centerX - sideOffset, centerY + r.buy, Widgets.pillW(font, oxyLabel, uiScale.factor), Widgets.pillH(font, oxyLabel, uiScale.factor), uiScale.minTouchPx)) {
                 buyUpgrade(Profile.Upgrade.Oxygen)
                 return
             }
-            if (Widgets.contains(tx, ty, centerX + 90f, centerY + r.buy, Widgets.pillW(font, spdLabel), Widgets.pillH(font, spdLabel))) {
+            if (Widgets.containsTouch(tx, ty, centerX + sideOffset, centerY + r.buy, Widgets.pillW(font, spdLabel, uiScale.factor), Widgets.pillH(font, spdLabel, uiScale.factor), uiScale.minTouchPx)) {
                 buyUpgrade(Profile.Upgrade.Speed)
                 return
             }
@@ -2140,7 +2153,7 @@ class DepthDiverGame : ApplicationAdapter() {
         val labels = menuLabels()
         for (i in labels.indices) {
             val (cx, cy) = menuGridPos(i)
-            Widgets.pill(batch, font, uiPixel, cx, cy, labels[i])
+            Widgets.pill(batch, font, uiPixel, cx, cy, labels[i], scale = uiScale.factor)
         }
 
         val segs = difficultySegs()
@@ -2697,7 +2710,15 @@ class DepthDiverGame : ApplicationAdapter() {
         val share: Float,
     )
 
-    private fun pauseSpacing(lineHeight: Float): Float = lineHeight + 28f
+    private fun pauseSpacing(lineHeight: Float): Float = lineHeight + uiScale.gap(28f)
+
+    /**
+     * Horizontal offset of the pause menu's paired side buttons.
+     *
+     * Draw and hit-test must agree on this, so both read it from here rather
+     * than repeating a pixel constant.
+     */
+    private fun sideButtonOffset(): Float = uiScale.px(90f)
 
     private fun pauseRows(tall: Boolean, lineHeight: Float): PauseRows {
         val s = pauseSpacing(lineHeight)
@@ -2731,8 +2752,9 @@ class DepthDiverGame : ApplicationAdapter() {
 
         font.color = Color.WHITE
         Widgets.pill(batch, font, uiPixel, centerX, centerY + r.resume, Strings.t("resume"))
-        Widgets.pill(batch, font, uiPixel, centerX - 90f, centerY + r.side, Strings.t("restart"))
-        Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY + r.side, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
+        val sideOffset = sideButtonOffset()
+        Widgets.pill(batch, font, uiPixel, centerX - sideOffset, centerY + r.side, Strings.t("restart"), scale = uiScale.factor)
+        Widgets.pill(batch, font, uiPixel, centerX + sideOffset, centerY + r.side, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"), scale = uiScale.factor)
         Widgets.pill(batch, font, uiPixel, centerX, centerY + r.menu, Strings.t("menu"))
         Widgets.pill(batch, font, uiPixel, centerX, centerY + r.share, Strings.t("shareRun"))
 
@@ -2751,8 +2773,8 @@ class DepthDiverGame : ApplicationAdapter() {
             val spdLabel = shopBuyLabel(Profile.Upgrade.Speed)
             val oxyAffordable = !Profile.isMaxed(Profile.Upgrade.Oxygen) && Profile.pearls() >= (Profile.upgradeCost(Profile.Upgrade.Oxygen) ?: 0)
             val spdAffordable = !Profile.isMaxed(Profile.Upgrade.Speed) && Profile.pearls() >= (Profile.upgradeCost(Profile.Upgrade.Speed) ?: 0)
-            Widgets.pill(batch, font, uiPixel, centerX - 90f, centerY + r.buy, oxyLabel, enabled = oxyAffordable)
-            Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY + r.buy, spdLabel, enabled = spdAffordable)
+            Widgets.pill(batch, font, uiPixel, centerX - sideOffset, centerY + r.buy, oxyLabel, enabled = oxyAffordable, scale = uiScale.factor)
+            Widgets.pill(batch, font, uiPixel, centerX + sideOffset, centerY + r.buy, spdLabel, enabled = spdAffordable, scale = uiScale.factor)
         }
     }
 

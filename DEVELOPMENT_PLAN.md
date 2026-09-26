@@ -106,7 +106,7 @@
 
 2. **Phase 12: Platform Polish**
    - [x] Controller/gamepad support: pure input mapping + optional runtime bridge
-   - [ ] Tablet/landscape optimizations (UI scale, touch targets)
+   - [x] Tablet/landscape optimizations: UiScale, scaled fonts/gaps/offsets, accessible touch targets
    - [ ] Web build (libGDX HTML5 backend) — blocked: gdx-backend-gwt needs GWT artifacts
    - [ ] iOS build preparation (docs/config)
 

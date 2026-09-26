@@ -9,19 +9,50 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch
 /** Lightweight HUD/menu widget helpers used by every screen. */
 object Widgets {
 
-    fun pillW(font: BitmapFont, label: String): Float = GlyphLayout(font, label).width + 26f
+    private const val PILL_PAD_X = 26f
+    private const val PILL_PAD_Y = 16f
 
-    fun pillH(font: BitmapFont, label: String): Float = GlyphLayout(font, label).height + 16f
+    fun pillW(font: BitmapFont, label: String, scale: Float = 1f): Float =
+        GlyphLayout(font, label).width + PILL_PAD_X * scale
+
+    fun pillH(font: BitmapFont, label: String, scale: Float = 1f): Float =
+        GlyphLayout(font, label).height + PILL_PAD_Y * scale
 
     fun contains(tx: Float, ty: Float, cx: Float, cy: Float, w: Float, h: Float): Boolean =
         tx >= cx - w / 2f && tx <= cx + w / 2f && ty >= cy - h / 2f && ty <= cy + h / 2f
 
+    /**
+     * Hit test with an accessibility floor on the target size.
+     *
+     * The drawn pill keeps its visual size, but small targets are grown to
+     * [minTouchPx] so they stay comfortably tappable on tablets without
+     * changing the layout.
+     */
+    fun containsTouch(
+        tx: Float,
+        ty: Float,
+        cx: Float,
+        cy: Float,
+        w: Float,
+        h: Float,
+        minTouchPx: Float,
+    ): Boolean = contains(tx, ty, cx, cy, maxOf(w, minTouchPx), maxOf(h, minTouchPx))
+
     /** Draw the styled pill button centered on (cx, cy); returns its actual [w, h] so hitboxes match.
      *  When [enabled] is false the pill is rendered dimmed. */
-    fun pill(batch: SpriteBatch, font: BitmapFont, pixel: Texture, cx: Float, cy: Float, label: String, enabled: Boolean = true): Pair<Float, Float> {
+    fun pill(
+        batch: SpriteBatch,
+        font: BitmapFont,
+        pixel: Texture,
+        cx: Float,
+        cy: Float,
+        label: String,
+        enabled: Boolean = true,
+        scale: Float = 1f,
+    ): Pair<Float, Float> {
         val layout = GlyphLayout(font, label)
-        val w = layout.width + 26f
-        val h = layout.height + 16f
+        val w = layout.width + PILL_PAD_X * scale
+        val h = layout.height + PILL_PAD_Y * scale
         batch.setColor(0f, 0f, 0f, 0.30f)
         batch.draw(pixel, cx - w / 2f + 4f, cy - h / 2f - 4f, w, h)
         batch.setColor(
@@ -33,7 +64,7 @@ object Widgets {
         batch.draw(pixel, cx - w / 2f, cy - h / 2f, w, h)
         batch.setColor(0.34f, 0.52f, 0.78f, if (enabled) 0.55f else 0.25f)
         batch.draw(pixel, cx - w / 2f, cy, w, h / 2f)
-        val b = 2f
+        val b = 2f * scale.coerceAtLeast(1f)
         batch.setColor(if (enabled) 0.95f else 0.45f, if (enabled) 0.97f else 0.48f, if (enabled) 1f else 0.5f, 0.95f)
         batch.draw(pixel, cx - w / 2f, cy - h / 2f, w, b)
         batch.draw(pixel, cx - w / 2f, cy + h / 2f - b, w, b)
