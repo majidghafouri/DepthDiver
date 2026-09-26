@@ -346,7 +346,7 @@ object Profile {
         p.flush()
     }
     
-    /** Screen shake toggle (independent of reduceMotion for fine-grained control). */
+/** Screen shake toggle (independent of reduceMotion for fine-grained control). */
     fun screenShakeEnabled(): Boolean = prefs().getBoolean("screenShake", true)
     
     fun setScreenShakeEnabled(enabled: Boolean) {
@@ -354,7 +354,17 @@ object Profile {
         p.putBoolean("screenShake", enabled)
         p.flush()
     }
-
+    
+    /** Current locale code (e.g., "en", "es"). */
+    fun locale(): String = prefs().getString("locale", "en")
+    
+    fun setLocale(localeCode: String) {
+        val p = prefs()
+        p.putString("locale", localeCode.lowercase())
+        p.flush()
+        com.depthdiver.common.Strings.setLocale(localeCode)
+    }
+    
     // ---------- upgrades ----------
 
     fun level(u: Upgrade): Int = prefs().getInteger(u.key, 0)
