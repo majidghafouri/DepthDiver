@@ -64,7 +64,7 @@
 - [x] Visual polish: particle effects enhancement, screen shake refinement, vignette pulse (`2b3edbf`)
 - [x] Audio: more SFX variety, dynamic music layers (`ea23789`)
 - [x] Content: new hazard types (angler, vortex), five biomes with blended water color and hazard mixes
-- [ ] Boss mechanics: additional patterns, visual telegraphing
+- [x] Boss mechanics: 4 attack patterns with windup telegraphing, health system, damage feedback (`302e837`)
 
 ### Phase 11: Social/Retention Features
 - [ ] Online leaderboards (Google Play Games / Game Center)
@@ -96,16 +96,19 @@
 
 ---
 
-## Immediate Next Steps (Phase 10)
+## Immediate Next Steps
 
-1. **Boss Mechanics**
-   - Telegraphed attack wind-ups before the boss crosses the screen
-   - Additional boss patterns (dive, sweep, charge)
-   - Boss health/damage feedback loop
+1. **Phase 11: Social/Retention Features**
+   - Online leaderboards (Google Play Games / Game Center)
+   - Cloud save/sync across devices
+   - Friend challenges / shareable run seeds
+   - Daily/weekly challenge notifications
 
-2. **Remaining Content Ideas**
-   - Pickup variants and challenge rules (time trials, no-damage runs)
-   - Per-biome hazard set dressing
+2. **Phase 12: Platform Polish**
+   - iOS build / App Store preparation
+   - Web build (libGDX HTML5 backend)
+   - Tablet/landscape optimizations
+   - Controller/gamepad support
 
 4. **Boss Mechanics**
    - Phase transitions with visual telegraphing

@@ -13,11 +13,18 @@ sealed class Hazard {
         val sway: Float,
         val baseX: Float
     ) : Hazard()
-    class Shark(
+class Shark(
         override val rect: Rectangle,
         val phase: Float,
-        val isBoss: Boolean = false
+        val isBoss: Boolean = false,
+        var health: Float = 1f,
+        var maxHealth: Float = 1f,
+        var attackPattern: BossPattern = BossPattern.IDLE,
+        var attackTimer: Float = 0f,
+        var attackCooldown: Float = 0f,
     ) : Hazard()
+
+    enum class BossPattern { IDLE, CHARGE, SWEEP, DIVE, PROJECTILE }
 
     /** Sweeps horizontally across the screen at a fixed depth band. */
     class Eel(

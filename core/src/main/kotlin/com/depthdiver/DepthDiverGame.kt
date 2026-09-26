@@ -511,6 +511,165 @@ class DepthDiverGame : ApplicationAdapter() {
         audio.playCountdown(step)
     }
 
+    private fun updateBoss(boss: Hazard.Shark, delta: Float, scrollSpeed: Float) {
+        boss.attackTimer += delta
+        boss.attackCooldown -= delta
+
+        when (boss.attackPattern) {
+            Hazard.BossPattern.IDLE -> {
+                boss.rect.y -= scrollSpeed * 0.15f * delta
+                boss.rect.x += MathUtils.sin(elapsed * 0.8f + boss.phase) * 0.7f * delta
+                if (boss.attackCooldown <= 0f) {
+                    chooseNextAttack(boss)
+                }
+            }
+            Hazard.BossPattern.CHARGE -> executeCharge(boss, delta, scrollSpeed)
+            Hazard.BossPattern.SWEEP -> executeSweep(boss, delta, scrollSpeed)
+            Hazard.BossPattern.DIVE -> executeDive(boss, delta, scrollSpeed)
+            Hazard.BossPattern.PROJECTILE -> executeProjectile(boss, delta, scrollSpeed)
+        }
+    }
+
+    private fun chooseNextAttack(boss: Hazard.Shark) {
+        val roll = fairness.unit()
+        boss.attackPattern = when {
+            roll < 0.35f -> Hazard.BossPattern.CHARGE
+            roll < 0.65f -> Hazard.BossPattern.SWEEP
+            roll < 0.85f -> Hazard.BossPattern.DIVE
+            else -> Hazard.BossPattern.PROJECTILE
+        }
+        boss.attackTimer = 0f
+        boss.attackCooldown = 0f
+    }
+
+    private fun executeCharge(boss: Hazard.Shark, delta: Float, scrollSpeed: Float) {
+        val windup = 1.2f
+        val chargeSpeed = 18f
+        if (boss.attackTimer < windup) {
+            boss.rect.y -= scrollSpeed * 0.1f * delta
+            val pulse = 0.5f + 0.5f * MathUtils.sin(elapsed * 15f)
+            boss.rect.x += MathUtils.sin(elapsed * 2f + boss.phase) * pulse * delta
+        } else if (boss.attackTimer < windup + 1.5f) {
+            val dir = if (playerX > boss.rect.x + boss.rect.width / 2f) 1f else -1f
+            boss.rect.x += dir * chargeSpeed * delta
+            boss.rect.y -= scrollSpeed * 0.05f * delta
+            if (boss.rect.x < boss.rect.width / 2f || boss.rect.x > WORLD_WIDTH_METERS - boss.rect.width / 2f) {
+                endAttack(boss)
+            }
+        } else {
+            endAttack(boss)
+        }
+    }
+
+    private fun executeSweep(boss: Hazard.Shark, delta: Float, scrollSpeed: Float) {
+        val windup = 1.0f
+        val sweepSpeed = 12f
+        if (boss.attackTimer < windup) {
+            boss.rect.y -= scrollSpeed * 0.1f * delta
+            val pulse = 0.5f + 0.5f * MathUtils.sin(elapsed * 10f)
+            boss.rect.x += MathUtils.sin(elapsed * 1.5f + boss.phase) * pulse * delta
+        } else if (boss.attackTimer < windup + 2f) {
+            val targetX = playerX.coerceIn(boss.rect.width / 2f, WORLD_WIDTH_METERS - boss.rect.width / 2f)
+            val dx = targetX - (boss.rect.x + boss.rect.width / 2f)
+            val step = Math.signum(dx) * minOf(sweepSpeed * delta, kotlin.math.abs(dx))
+            boss.rect.x += step
+            boss.rect.y -= scrollSpeed * 0.05f * delta
+        } else {
+            endAttack(boss)
+        }
+    }
+
+    private fun executeDive(boss: Hazard.Shark, delta: Float, scrollSpeed: Float) {
+        val windup = 1.5f
+        val diveSpeed = 22f
+        if (boss.attackTimer < windup) {
+            boss.rect.y -= scrollSpeed * 0.05f * delta
+            val pulse = 0.5f + 0.5f * MathUtils.sin(elapsed * 8f)
+            boss.rect.x += MathUtils.sin(elapsed * 2f + boss.phase) * pulse * delta
+        } else if (boss.attackTimer < windup + 2f) {
+            boss.rect.y -= diveSpeed * delta
+            boss.rect.x += MathUtils.sin(elapsed * 3f + boss.phase) * 1.5f * delta
+        } else {
+            endAttack(boss)
+        }
+    }
+
+    private fun executeProjectile(boss: Hazard.Shark, delta: Float, scrollSpeed: Float) {
+        val windup = 1.0f
+        val fireInterval = 0.4f
+        if (boss.attackTimer < windup) {
+            boss.rect.y -= scrollSpeed * 0.1f * delta
+            val pulse = 0.5f + 0.5f * MathUtils.sin(elapsed * 12f)
+            boss.rect.x += MathUtils.sin(elapsed * 1.5f + boss.phase) * pulse * delta
+        } else if (boss.attackTimer < windup + 3f) {
+            boss.rect.y -= scrollSpeed * 0.1f * delta
+            boss.rect.x += MathUtils.sin(elapsed * 1.2f + boss.phase) * 0.8f * delta
+            if (boss.attackTimer % fireInterval < delta) {
+                spawnBossProjectile(boss)
+            }
+        } else {
+            endAttack(boss)
+        }
+    }
+
+    private fun endAttack(boss: Hazard.Shark) {
+        boss.attackPattern = Hazard.BossPattern.IDLE
+        boss.attackTimer = 0f
+        boss.attackCooldown = 3f + fairness.range(0f, 2f)
+    }
+
+    private fun damageBoss(boss: Hazard.Shark) {
+        boss.health -= 1f
+        if (boss.health <= 0f) {
+            onBossDefeated(boss)
+        } else {
+            audio.playBossHit()
+            triggerShake(0.15f, 0.4f, MathUtils.PI)
+            spawnSparkParticles(playerX, playerY, Color.MAGENTA, 10)
+        }
+    }
+
+    private fun onBossDefeated(boss: Hazard.Shark) {
+        boss.attackPattern = Hazard.BossPattern.IDLE
+        audio.playLevelUp()
+        audio.playAchieve()
+        triggerShake(0.5f, 0.8f, MathUtils.PI)
+        spawnExplosionParticles(playerX, playerY, Color(1f, 0.8f, 0.2f, 1f))
+        spawnSparkParticles(playerX, playerY, Color.GOLD, 20)
+        Gdx.input.vibrate(200)
+        val bonus = 200
+        val ledger = activeRun ?: return
+        if (awardRunBonus("boss:${ledger.runId}", bonus, BonusCategory.BOSS)) {
+            achievementToast = "${Strings.t("bossCleared")} +$bonus"
+            achievementToastTimer = 4f
+        }
+        val itr = hazards.iterator()
+        while (itr.hasNext()) {
+            val h = itr.next()
+            if (h is Hazard.Shark && h.isBoss && h === boss) {
+                itr.remove()
+                break
+            }
+        }
+    }
+
+    private fun spawnBossProjectile(boss: Hazard.Shark) {
+        val centerX = boss.rect.x + boss.rect.width / 2f
+        val centerY = boss.rect.y
+        val projWidth = 1.2f
+        val projHeight = 2.5f
+        val proj = Hazard.Shark(
+            rect = Rectangle(centerX - projWidth / 2f, centerY - projHeight, projWidth, projHeight),
+            phase = 0f,
+            isBoss = false,
+            health = 1f,
+            maxHealth = 1f,
+            attackPattern = Hazard.BossPattern.IDLE,
+        )
+        hazards.add(proj)
+        audio.playAlert()
+    }
+
     private fun updateAudioMix(dt: Float) {
         if (dt <= 0f) return
         if (state == GameState.PLAYING) {
@@ -809,34 +968,59 @@ class DepthDiverGame : ApplicationAdapter() {
             val hazard = hazardIterator.next()
             if (hazard is Hazard.Vortex) continue
             if (!playerRect().overlaps(hazard.rect)) continue
+
+            val isBoss = hazard is Hazard.Shark && hazard.isBoss
+            val isBossProjectile = hazard is Hazard.Shark && !hazard.isBoss && hazard.maxHealth == 1f && hazard.health == 1f && hazard.attackPattern == Hazard.BossPattern.IDLE
+
             when (resolveShieldCollision(upgradeShieldLevel, shieldActive, shieldCooldown)) {
                 ShieldCollisionResult.ACTIVATED -> {
                     shieldActive = true
                     shieldCooldown = shieldDuration(upgradeShieldLevel)
                     audio.playShield()
-                    triggerShake(0.15f, 0.4f, MathUtils.PI) // Shield activation shakes backward
+                    triggerShake(0.15f, 0.4f, MathUtils.PI)
                     Gdx.input.vibrate(60)
-                    spawnExplosionParticles(playerX, playerY, Color.MAGENTA) // Shield activation explosion
-                    spawnSparkParticles(playerX, playerY, Color.WHITE, 12) // Shield sparks
-                    hazardIterator.remove()
+                    spawnExplosionParticles(playerX, playerY, Color.MAGENTA)
+                    spawnSparkParticles(playerX, playerY, Color.WHITE, 12)
+                    if (isBoss) {
+                        damageBoss(hazard)
+                    } else {
+                        hazardIterator.remove()
+                    }
                 }
                 ShieldCollisionResult.BLOCKED -> {
-                    if (hazard is Hazard.Shark && hazard.isBoss) {
+                    if (isBoss) {
                         audio.playBossHit()
                         triggerShake(0.2f, 0.5f, MathUtils.PI)
+                        damageBoss(hazard)
+                    } else if (isBossProjectile) {
+                        audio.playBossHit()
+                        triggerShake(0.15f, 0.3f, MathUtils.PI)
+                        hazardIterator.remove()
                     } else {
                         audio.playShieldBreak()
+                        spawnSparkParticles(playerX, playerY, Color.MAGENTA, 8)
+                        hazardIterator.remove()
                     }
-                    spawnSparkParticles(playerX, playerY, Color.MAGENTA, 8) // Block sparks
-                    hazardIterator.remove()
                 }
                 ShieldCollisionResult.FATAL -> {
-                    audio.playCrash()
-                    triggerShake(0.3f, 0.6f, MathUtils.PI) // Fatal collision shakes backward
-                    Gdx.input.vibrate(100)
-                    spawnExplosionParticles(playerX, playerY, Color.RED) // Death explosion
-                    endGame(RunTerminalReason.HAZARD)
-                    return
+                    if (isBoss) {
+                        audio.playCrash()
+                        triggerShake(0.3f, 0.6f, MathUtils.PI)
+                        Gdx.input.vibrate(100)
+                        damageBoss(hazard)
+                    } else if (isBossProjectile) {
+                        audio.playCrash()
+                        triggerShake(0.3f, 0.5f, MathUtils.PI)
+                        Gdx.input.vibrate(80)
+                        hazardIterator.remove()
+                    } else {
+                        audio.playCrash()
+                        triggerShake(0.3f, 0.6f, MathUtils.PI)
+                        Gdx.input.vibrate(100)
+                        spawnExplosionParticles(playerX, playerY, Color.RED)
+                        endGame(RunTerminalReason.HAZARD)
+                        return
+                    }
                 }
             }
         }
@@ -956,8 +1140,12 @@ class DepthDiverGame : ApplicationAdapter() {
                     hazard.rect.x = hazard.baseX + MathUtils.sin(elapsed * 1.5f + hazard.phase) * hazard.sway
                 }
                 is Hazard.Shark -> {
-                    hazard.rect.y -= scrollSpeed * (if (hazard.isBoss) 0.15f else 0.5f) * delta
-                    hazard.rect.x += MathUtils.sin(elapsed * 0.8f + hazard.phase) * 0.7f * delta
+                    if (hazard.isBoss) {
+                        updateBoss(hazard, delta, scrollSpeed)
+                    } else {
+                        hazard.rect.y -= scrollSpeed * 0.5f * delta
+                        hazard.rect.x += MathUtils.sin(elapsed * 0.8f + hazard.phase) * 0.7f * delta
+                    }
                 }
                 is Hazard.Eel -> {
                     hazard.rect.x += hazard.speed * hazard.dir * delta
@@ -1068,7 +1256,19 @@ class DepthDiverGame : ApplicationAdapter() {
         val w = if (boss) 6.5f else 4.2f
         val h = if (boss) 2.3f else 1.5f
         val center = fairness.hazardCenter(playerX, w, depth).centerXMeters
-        hazards.add(Hazard.Shark(Rectangle(center - w / 2f, top + 3f, w, h), 0f, boss))
+        val hp = if (boss) 20f + (depth / 50f).coerceAtMost(10f) else 1f
+        hazards.add(
+            Hazard.Shark(
+                rect = Rectangle(center - w / 2f, top + 3f, w, h),
+                phase = 0f,
+                isBoss = boss,
+                health = hp,
+                maxHealth = hp,
+                attackPattern = Hazard.BossPattern.IDLE,
+                attackTimer = 0f,
+                attackCooldown = 3f,
+            )
+        )
         return true
     }
 
@@ -1140,13 +1340,9 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun onBossEscaped() {
         val ledger = activeRun ?: return
-        val bonus = 50
-        if (awardRunBonus("boss:${ledger.runId}", bonus, BonusCategory.BOSS)) {
-            achievementToast = "${Strings.t("bossCleared")} +$bonus"
-            achievementToastTimer = 3f
-            audio.playLevelUp()
-            audio.playAchieve()
-        }
+        achievementToast = Strings.t("bossEscaped")
+        achievementToastTimer = 3f
+        audio.playAlert()
     }
 
     private fun spawnPickup() {
@@ -1638,7 +1834,15 @@ class DepthDiverGame : ApplicationAdapter() {
                 is Hazard.Rock -> batch.draw(rockTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
                 is Hazard.Mine -> batch.draw(mineTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
                 is Hazard.Jellyfish -> batch.draw(jellyfishTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
-                is Hazard.Shark -> batch.draw(sharkTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                is Hazard.Shark -> {
+                    if (hazard.isBoss) {
+                        drawBossTelegraph(hazard)
+                    }
+                    batch.draw(sharkTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
+                    if (hazard.isBoss) {
+                        drawBossHealthBar(hazard)
+                    }
+                }
                 is Hazard.Eel ->
                     if (hazard.dir > 0) {
                         batch.draw(eelTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
@@ -2304,6 +2508,82 @@ class DepthDiverGame : ApplicationAdapter() {
         font.color = Color(0.6f, 0.9f, 1f, alpha)
         font.draw(batch, label, screenWidth / 2f - layout.width / 2f, centerY - (layout.height - font.capHeight) / 2f)
         font.color = Color.WHITE
+    }
+
+    private fun drawBossTelegraph(boss: Hazard.Shark) {
+        val cx = boss.rect.x + boss.rect.width / 2f
+        val cy = boss.rect.y + boss.rect.height / 2f
+        val windupProgress = when (boss.attackPattern) {
+            Hazard.BossPattern.CHARGE -> 1.2f
+            Hazard.BossPattern.SWEEP -> 1.0f
+            Hazard.BossPattern.DIVE -> 1.5f
+            Hazard.BossPattern.PROJECTILE -> 1.0f
+            else -> 0f
+        }
+        if (windupProgress <= 0f || boss.attackTimer >= windupProgress) return
+
+        val progress = (boss.attackTimer / windupProgress).coerceIn(0f, 1f)
+        val intensity = 0.3f + 0.7f * progress
+        val pulse = 0.5f + 0.5f * MathUtils.sin(elapsed * 20f * progress)
+
+        when (boss.attackPattern) {
+            Hazard.BossPattern.CHARGE -> {
+                val dir = if (playerX > cx) 1f else -1f
+                val targetX = if (dir > 0f) WORLD_WIDTH_METERS + 5f else -5f
+                val exclamationX = cx + dir * (boss.rect.width / 2f + 1.5f + pulse * 0.5f)
+                val exclamationY = cy - boss.rect.height / 2f - 1.5f
+                batch.setColor(1f, 0.2f, 0.1f, intensity)
+                font.color = Color(1f, 0.2f, 0.1f, intensity)
+                font.draw(batch, "!", exclamationX - 0.3f, exclamationY + 0.8f)
+                batch.setColor(1f, 0.1f, 0.05f, intensity * 0.5f)
+                batch.draw(uiPixel, cx, cy, (targetX - cx) * progress, boss.rect.height)
+            }
+            Hazard.BossPattern.SWEEP -> {
+                val sweepWidth = WORLD_WIDTH_METERS * 0.8f
+                val startX = boss.rect.width / 2f + 0.5f
+                val endX = WORLD_WIDTH_METERS - startX
+                batch.setColor(1f, 0.5f, 0.1f, intensity * 0.4f)
+                batch.draw(uiPixel, startX, boss.rect.y - 0.2f, sweepWidth, boss.rect.height + 0.4f)
+                val arrowX = cx + (endX - startX) * progress - startX
+                batch.setColor(1f, 0.7f, 0.2f, intensity)
+                batch.draw(uiPixel, arrowX - 0.5f, cy - 0.5f, 1f, 1f)
+            }
+            Hazard.BossPattern.DIVE -> {
+                val warningY = boss.rect.y - boss.rect.height * 2f
+                batch.setColor(1f, 0.15f, 0.05f, intensity * 0.6f)
+                batch.draw(uiPixel, 0f, warningY - 1f, WORLD_WIDTH_METERS, 2f + progress * 5f)
+                val exclamationY = warningY + progress * 5f
+                batch.setColor(1f, 0.2f, 0.1f, intensity)
+                font.color = Color(1f, 0.2f, 0.1f, intensity)
+                font.draw(batch, "⚡", cx - 0.4f, exclamationY)
+            }
+            Hazard.BossPattern.PROJECTILE -> {
+                val arcs = 3
+                for (i in 0 until arcs) {
+                    val angle = (-MathUtils.PI / 3f) + i * (MathUtils.PI / 3f)
+                    val targetX = cx + MathUtils.cos(angle) * 10f
+                    val targetY = boss.rect.y - 10f
+                    batch.setColor(0.8f, 0.4f, 0.1f, intensity * 0.4f)
+                    batch.draw(uiPixel, cx - 0.2f, boss.rect.y - 0.2f, 0.4f, (targetY - boss.rect.y) * progress)
+                }
+            }
+            else -> {}
+        }
+    }
+
+    private fun drawBossHealthBar(boss: Hazard.Shark) {
+        val barWidth = boss.rect.width + 2f
+        val barHeight = 0.35f
+        val barX = boss.rect.x - 1f
+        val barY = boss.rect.y + boss.rect.height + 0.4f
+        val frac = (boss.health / boss.maxHealth).coerceIn(0f, 1f)
+        batch.setColor(0f, 0f, 0f, 0.6f)
+        batch.draw(uiPixel, barX, barY, barWidth, barHeight)
+        batch.setColor(
+            if (frac > 0.5f) Color.GREEN else if (frac > 0.25f) Color.YELLOW else Color.RED
+        )
+        batch.draw(uiPixel, barX, barY, barWidth * frac, barHeight)
+        batch.setColor(1f, 1f, 1f, 1f)
     }
 
     private fun drawAchievementToast() {

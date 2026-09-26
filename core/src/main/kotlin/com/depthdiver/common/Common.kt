@@ -37,6 +37,7 @@ object Strings {
         "zoneSunlit" to "SUNLIT COAST", "zoneReef" to "TURQUOISE REEF",
         "zoneMidnight" to "MIDNIGHT ZONE", "zoneAbyss" to "ABYSS",
         "zoneHadal" to "HADAL TRENCH",
+        "bossEscaped" to "BOSS ESCAPED",
         // Settings
         "settings" to "SETTINGS", "masterVolume" to "MASTER VOLUME", "sfxVolume" to "SFX VOLUME",
         "musicVolume" to "MUSIC VOLUME", "reduceMotion" to "REDUCE MOTION",
@@ -68,6 +69,7 @@ object Strings {
         "zoneSunlit" to "COSTA SOLEADA", "zoneReef" to "ARRECIFE TURQUESA",
         "zoneMidnight" to "ZONA MEDIANOCHE", "zoneAbyss" to "ABISMO",
         "zoneHadal" to "FOSA HADAL",
+        "bossEscaped" to "JEFE ESCAPÓ",
         // Settings
         "settings" to "AJUSTES", "masterVolume" to "VOLUMEN MAESTRO", "sfxVolume" to "VOLUMEN EFECTOS",
         "musicVolume" to "VOLUMEN MÚSICA", "reduceMotion" to "REDUCIR MOVIMIENTO",
