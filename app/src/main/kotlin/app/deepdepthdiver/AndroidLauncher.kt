@@ -12,6 +12,7 @@ class AndroidLauncher : AndroidApplication() {
 
     private var game: DepthDiverGame? = null
     private var backCallback: OnBackInvokedCallback? = null
+    private var notificationManager: ChallengeNotificationManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,6 +29,11 @@ class AndroidLauncher : AndroidApplication() {
         // TODO: Initialize GPGS cloud save when play-services-games dependency is available
         // val cloudSave = GpgsCloudSave(this)
         // CloudSave.setCustomImpl(cloudSave)
+
+        // Initialize notifications
+        notificationManager = ChallengeNotificationManager(this)
+        notificationManager?.scheduleDailyChallenge()
+        notificationManager?.scheduleWeeklyChallenge()
 
         initialize(instance, config)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

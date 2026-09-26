@@ -40,6 +40,10 @@ object Strings {
         "bossEscaped" to "BOSS ESCAPED",
         "shareRun" to "SHARE RUN",
         "copied" to "COPIED",
+        "dailyChallenge" to "Daily Challenge",
+        "weeklyChallenge" to "Weekly Challenge",
+        "weeklyDesc" to "Complete 3 daily challenges this week",
+        "reward" to "Reward",
         // Settings
         "settings" to "SETTINGS", "masterVolume" to "MASTER VOLUME", "sfxVolume" to "SFX VOLUME",
         "musicVolume" to "MUSIC VOLUME", "reduceMotion" to "REDUCE MOTION",
@@ -74,6 +78,10 @@ object Strings {
         "bossEscaped" to "JEFE ESCAPÓ",
         "shareRun" to "COMPARTIR PARTIDA",
         "copied" to "COPIADO",
+        "dailyChallenge" to "Desafío Diario",
+        "weeklyChallenge" to "Desafío Semanal",
+        "weeklyDesc" to "Completa 3 desafíos diarios esta semana",
+        "reward" to "Recompensa",
         // Settings
         "settings" to "AJUSTES", "masterVolume" to "VOLUMEN MAESTRO", "sfxVolume" to "VOLUMEN EFECTOS",
         "musicVolume" to "VOLUMEN MÚSICA", "reduceMotion" to "REDUCIR MOVIMIENTO",
