@@ -101,7 +101,7 @@
 1. **Phase 11: Social/Retention Features**
    - [x] Online leaderboards: cloud-ready interface, local-first implementation, GPGS stub
    - [x] Cloud save/sync: cloud-ready interface, GPGS Saved Games stub
-   - [ ] Friend challenges / shareable run seeds
+   - [x] Friend challenges / shareable run seeds: seed encoding/decoding, pause menu share button, clipboard copy
    - [ ] Daily/weekly challenge notifications
 
 2. **Phase 12: Platform Polish**

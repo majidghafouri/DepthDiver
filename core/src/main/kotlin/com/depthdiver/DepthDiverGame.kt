@@ -283,6 +283,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var countdownStep = 0
     private var biome: Biome = Biome.SUNLIT_SHALLOWS
     private var biomeToastTimer = 0f
+    private val runSeedProvider = RunSeedProvider()
+    private var currentRunCode: String? = null
     private var lowOxyTick = 0f
 
     private var playerSpeed = 16f
@@ -705,6 +707,14 @@ class DepthDiverGame : ApplicationAdapter() {
         }
     }
 
+    private fun shareRunCode() {
+        val code = shareCurrentRunCode() ?: return
+        Gdx.app.getClipboard().setContents(code)
+        achievementToast = "${Strings.t("copied")} ${Strings.t("shareRun")}: $code"
+        achievementToastTimer = 3f
+        audio.playClick()
+    }
+
     private fun pauseGame() {
         if (state != GameState.PLAYING) return
         try {
@@ -716,6 +726,20 @@ class DepthDiverGame : ApplicationAdapter() {
         gameplayClock.reset()
         frameDelta = 0f
         stopShake()
+    }
+
+    fun shareCurrentRunCode(): String? = currentRunCode
+
+    fun setRunCodeFromFriend(code: String): Boolean {
+        return RunSeed.decode(code)?.let { (seed, diff) ->
+            fairness.reset(seed)
+            if (diff != Profile.difficulty()) {
+                Profile.setDifficulty(diff)
+            }
+            resetWorld()
+            currentRunCode = RunSeed.encode(seed, diff)
+            true
+        } ?: false
     }
 
     private fun resumeGame() {
@@ -1722,6 +1746,11 @@ class DepthDiverGame : ApplicationAdapter() {
             audio.playClick()
             return
         }
+        if (Widgets.contains(tx, ty, centerX, centerY + r.share, Widgets.pillW(font, Strings.t("shareRun")), Widgets.pillH(font, Strings.t("shareRun")))) {
+            shareRunCode()
+            audio.playClick()
+            return
+        }
         if (tall) {
             val oxyLabel = shopBuyLabel(Profile.Upgrade.Oxygen)
             val spdLabel = shopBuyLabel(Profile.Upgrade.Speed)
@@ -2606,6 +2635,7 @@ class DepthDiverGame : ApplicationAdapter() {
         val help: Float,
         val buyLabel: Float,
         val buy: Float,
+        val share: Float,
     )
 
     private fun pauseSpacing(lineHeight: Float): Float = lineHeight + 28f
@@ -2613,9 +2643,9 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun pauseRows(tall: Boolean, lineHeight: Float): PauseRows {
         val s = pauseSpacing(lineHeight)
         return if (tall) {
-            PauseRows(3.0f * s, 2.0f * s, 1.0f * s, 0.0f * s, -1.0f * s, -2.0f * s, -3.0f * s, -4.0f * s)
+            PauseRows(3.0f * s, 2.0f * s, 1.0f * s, 0.0f * s, -1.0f * s, -2.0f * s, -3.0f * s, -4.0f * s, -5.0f * s)
         } else {
-            PauseRows(2.5f * s, Float.NaN, 1.0f * s, 0.0f * s, -1.0f * s, -2.0f * s, Float.NaN, Float.NaN)
+            PauseRows(2.5f * s, Float.NaN, 1.0f * s, 0.0f * s, -1.0f * s, -2.0f * s, Float.NaN, Float.NaN, -3.5f * s)
         }
     }
 
@@ -2645,6 +2675,7 @@ class DepthDiverGame : ApplicationAdapter() {
         Widgets.pill(batch, font, uiPixel, centerX - 90f, centerY + r.side, Strings.t("restart"))
         Widgets.pill(batch, font, uiPixel, centerX + 90f, centerY + r.side, if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"))
         Widgets.pill(batch, font, uiPixel, centerX, centerY + r.menu, Strings.t("menu"))
+        Widgets.pill(batch, font, uiPixel, centerX, centerY + r.share, Strings.t("shareRun"))
 
         font.color = Color.CYAN
         val helpStr = "P/Esc ${Strings.t("resume").lowercase()}    R ${Strings.t("restart").lowercase()}    M ${if (audio.muted) Strings.t("muteOn").lowercase() else Strings.t("muteOff").lowercase()}"
@@ -2795,7 +2826,9 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun resetWorld() {
         activeRun = null
-        fairness.reset(System.nanoTime())
+        val difficulty = Profile.difficulty()
+        val code = runSeedProvider.onRunStart(fairness, difficulty)
+        currentRunCode = code
         gameplayClock.reset()
         frameDelta = 0f
         playerX = INITIAL_PLAYER_X_METERS

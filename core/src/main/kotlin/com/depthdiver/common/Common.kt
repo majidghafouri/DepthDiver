@@ -38,6 +38,8 @@ object Strings {
         "zoneMidnight" to "MIDNIGHT ZONE", "zoneAbyss" to "ABYSS",
         "zoneHadal" to "HADAL TRENCH",
         "bossEscaped" to "BOSS ESCAPED",
+        "shareRun" to "SHARE RUN",
+        "copied" to "COPIED",
         // Settings
         "settings" to "SETTINGS", "masterVolume" to "MASTER VOLUME", "sfxVolume" to "SFX VOLUME",
         "musicVolume" to "MUSIC VOLUME", "reduceMotion" to "REDUCE MOTION",
@@ -70,6 +72,8 @@ object Strings {
         "zoneMidnight" to "ZONA MEDIANOCHE", "zoneAbyss" to "ABISMO",
         "zoneHadal" to "FOSA HADAL",
         "bossEscaped" to "JEFE ESCAPÓ",
+        "shareRun" to "COMPARTIR PARTIDA",
+        "copied" to "COPIADO",
         // Settings
         "settings" to "AJUSTES", "masterVolume" to "VOLUMEN MAESTRO", "sfxVolume" to "VOLUMEN EFECTOS",
         "musicVolume" to "VOLUMEN MÚSICA", "reduceMotion" to "REDUCIR MOVIMIENTO",
