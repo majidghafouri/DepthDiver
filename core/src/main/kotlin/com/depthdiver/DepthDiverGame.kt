@@ -28,6 +28,12 @@ import com.depthdiver.game.Biome
 import com.depthdiver.game.GamepadBridge
 import com.depthdiver.game.MenuMetrics
 import com.depthdiver.menu.FontMenuText
+import com.depthdiver.world.ParticleView
+import com.depthdiver.world.waterColorAt
+import com.depthdiver.world.WorldRenderer
+import com.depthdiver.world.WorldShake
+import com.depthdiver.world.WorldTextures
+import com.depthdiver.world.WorldViewState
 import com.depthdiver.menu.MenuGeometry
 import com.depthdiver.menu.MenuRenderer
 import com.depthdiver.menu.MenuState
@@ -320,6 +326,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var menuFbo: FrameBuffer? = null
     private var menuGeometry: MenuGeometry? = null
     private var menuRenderer: MenuRenderer? = null
+    private var worldRenderer: WorldRenderer? = null
+    private var worldTextures: WorldTextures? = null
 
     /**
      * Menu geometry, rebuilt whenever the viewport changes. One instance is the
@@ -344,6 +352,30 @@ class DepthDiverGame : ApplicationAdapter() {
         bestScore = bestScore,
         bestRunPearls = runPearls,
     )
+
+    private fun world(): WorldViewState = WorldViewState(
+        spec = worldViewSpec,
+        camera = worldCameraTarget,
+        water = waterColorAt(depth),
+        depth = depth,
+        elapsed = elapsed,
+        // Shake only applies during a live run, so the state carries it only there.
+        shake = if (state == GameState.PLAYING && shakeTimer > 0f) {
+            WorldShake(shakeTimer, shakeDuration, shakeIntensity)
+        } else {
+            null
+        },
+        particles = particles.map {
+            ParticleView(it.x, it.y, it.life, it.maxLife, it.color, it.size)
+        },
+        hazards = hazards,
+        pickups = pickups,
+        playerX = playerX,
+        playerY = playerY,
+        playerRadius = playerRadius,
+    )
+
+    private fun worlds() = worldRenderer!!
 
     private fun menus() = menuRenderer ?: MenuRenderer(
         batch, font, titleFont, uiPixel, playerTex, screenCamera,
@@ -524,6 +556,15 @@ class DepthDiverGame : ApplicationAdapter() {
 
         // playerTex only exists once the pixel art is uploaded.
         menuRenderer = MenuRenderer(batch, font, titleFont, uiPixel, playerTex, screenCamera)
+        // Grouped so the world renderer takes one dependency, and built only once
+        // every texture above has been uploaded.
+        worldTextures = WorldTextures(
+            pixel = uiPixel, player = playerTex, rock = rockTex, mine = mineTex,
+            jellyfish = jellyfishTex, shark = sharkTex, eel = eelTex,
+            angler = anglerTex, vortex = vortexTex, oxygen = oxyTex,
+            pearl = pearlTex, fish = fishTex,
+        )
+        worldRenderer = WorldRenderer(batch, worldCamera, font, worldTextures!!)
         resetWorld()
         recoverStartupRuns()
         Gdx.input.inputProcessor = object : InputAdapter() {
@@ -1935,7 +1976,7 @@ class DepthDiverGame : ApplicationAdapter() {
             updateWorldCamera()
             batch.projectionMatrix = worldCamera.combined
             batch.begin()
-            if (state == GameState.PAUSED) drawWorldBlurred() else drawWorld()
+            if (state == GameState.PAUSED) drawWorldBlurred() else worlds().render(world())
             screenCamera.update()
             batch.projectionMatrix = screenCamera.combined
             drawHud()
@@ -2001,7 +2042,7 @@ class DepthDiverGame : ApplicationAdapter() {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
         batch.projectionMatrix = worldCamera.combined
         batch.begin()
-        drawWorld()
+        worlds().render(world())
         batch.end()
         fbo.end()
         screenCamera.update()
@@ -2012,197 +2053,6 @@ class DepthDiverGame : ApplicationAdapter() {
         batch.setColor(0f, 0.03f, 0.10f, 0.28f)
         batch.draw(uiPixel, 0f, 0f, screenWidth, screenHeight)
         batch.setColor(Color.WHITE)
-    }
-
-    private fun drawWorld() {
-        drawWorldBackground()
-        if (state == GameState.PLAYING && shakeTimer > 0f) {
-            val duration = shakeDuration.coerceAtLeast(0.0001f)
-            val progress = (1f - shakeTimer / duration).coerceIn(0f, 1f)
-            val currentIntensity = shakeIntensity * (1f - progress * 0.7f)
-            worldCamera.position.x += MathUtils.random(-currentIntensity, currentIntensity)
-            worldCamera.position.y += MathUtils.random(-currentIntensity, currentIntensity)
-            worldCamera.update()
-            batch.projectionMatrix = worldCamera.combined
-        }
-
-        batch.setColor(1f, 1f, 1f, 1f)
-        for (particle in particles) {
-            val alpha = particle.life / particle.maxLife
-            batch.setColor(particle.color.r, particle.color.g, particle.color.b, alpha)
-            batch.draw(uiPixel, particle.x - particle.size / 2f, particle.y - particle.size / 2f, particle.size, particle.size)
-        }
-        batch.setColor(1f, 1f, 1f, 1f)
-        for (hazard in hazards) {
-            val isBoss = hazard is Hazard.Shark && hazard.isBoss
-            if (isBoss) batch.setColor(1f, 0.45f, 0.4f, 1f)
-            when (hazard) {
-                is Hazard.Rock -> batch.draw(rockTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
-                is Hazard.Mine -> batch.draw(mineTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
-                is Hazard.Jellyfish -> batch.draw(jellyfishTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
-                is Hazard.Shark -> {
-                    if (hazard.isBoss) {
-                        drawBossTelegraph(hazard)
-                    }
-                    batch.draw(sharkTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
-                    if (hazard.isBoss) {
-                        drawBossHealthBar(hazard)
-                    }
-                }
-                is Hazard.Eel ->
-                    if (hazard.dir > 0) {
-                        batch.draw(eelTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
-                    } else {
-                        batch.draw(eelTex, hazard.rect.x + hazard.rect.width, hazard.rect.y, -hazard.rect.width, hazard.rect.height)
-                    }
-                is Hazard.Angler -> {
-                    batch.draw(anglerTex, hazard.rect.x, hazard.rect.y, hazard.rect.width, hazard.rect.height)
-                    val pulse = 0.35f + 0.25f * MathUtils.sin(elapsed * 3f + hazard.phase)
-                    batch.setColor(1f, 0.9f, 0.5f, pulse)
-                    val lureX = hazard.rect.x + hazard.rect.width * 0.85f
-                    val lureY = hazard.rect.y + hazard.rect.height * 0.8f
-                    batch.draw(uiPixel, lureX - 0.3f, lureY - 0.3f, 0.6f, 0.6f)
-                }
-                is Hazard.Vortex -> {
-                    val centerX = hazard.rect.x + hazard.rect.width / 2f
-                    val centerY = hazard.rect.y + hazard.rect.height / 2f
-                    val spin = 1f + 0.08f * MathUtils.sin(elapsed * 2.5f + hazard.phase)
-                    batch.setColor(1f, 1f, 1f, 0.55f)
-                    batch.draw(
-                        vortexTex,
-                        centerX - hazard.radius * spin,
-                        centerY - hazard.radius * spin,
-                        hazard.radius * 2f * spin,
-                        hazard.radius * 2f * spin
-                    )
-                }
-            }
-            batch.setColor(1f, 1f, 1f, 1f)
-        }
-        for (pickup in pickups) {
-            if (pickup.collected) continue
-            val tex = if (pickup is Pickup.OxygenTank) oxyTex else pearlTex
-            batch.draw(tex, pickup.rect.x, pickup.rect.y, pickup.rect.width, pickup.rect.height)
-        }
-
-        batch.draw(
-            playerTex,
-            playerX - playerRadius,
-            playerY - playerRadius,
-            playerRadius * 2f,
-            playerRadius * 2f
-        )
-
-        if (state == GameState.PLAYING && shakeTimer > 0f) {
-            worldCamera.position.set(worldCameraTarget.xMeters, worldCameraTarget.yMeters, 0f)
-            worldCamera.update()
-            batch.projectionMatrix = worldCamera.combined
-        }
-    }
-
-    private fun waterColor(): WaterColor {
-        val current = Biome.forDepth(depth)
-        val progress = Biome.progressWithin(depth, current)
-        return current.blendTo(Biome.nextOf(current), progress)
-    }
-
-    private fun drawWorldBackground() {
-        val water = waterColor()
-        val topR = water.topRed
-        val topG = water.topGreen
-        val topB = water.topBlue
-        val botR = water.bottomRed
-        val botG = water.bottomGreen
-        val botB = water.bottomBlue
-
-        val visibleCamera = worldCameraTarget
-        val backgroundMargin = 1f
-        val left = worldViewSpec.worldLeft(visibleCamera) - backgroundMargin
-        val top = worldViewSpec.worldTop(visibleCamera) + backgroundMargin
-        val visibleWidth = worldViewSpec.viewWidthMeters + backgroundMargin * 2f
-        val visibleHeight = worldViewSpec.viewHeightMeters + backgroundMargin * 2f
-
-        val bands = 16
-        val bandH = visibleHeight / bands
-        for (i in 0 until bands) {
-            val t = (i + 1f) / bands
-            batch.setColor(
-                topR + (botR - topR) * t,
-                topG + (botG - topG) * t,
-                topB + (botB - topB) * t,
-                1f
-            )
-            batch.draw(uiPixel, left, top - (i + 1) * bandH - 0.1f, visibleWidth, bandH + 0.2f)
-        }
-
-        val streakCount = 5
-        for (i in 0 until streakCount) {
-            val x = left + ((i * 31) % 100) / 100f * visibleWidth
-            val speed = 1.3f + (i % 3) * 0.7f
-            val span = visibleHeight + 5f
-            val start = ((i * 47) % 100) / 100f * span
-            val y = top - (start + elapsed * speed) % span - 2.5f
-            batch.setColor(1f, 1f, 1f, 0.045f)
-            batch.draw(uiPixel, x - 3.5f, y - 0.05f, 7f, 0.1f)
-        }
-
-        drawAmbientFish()
-
-        val surface = (1f - (depth / WORLD_WIDTH_METERS)).coerceIn(0f, 1f)
-        if (surface > 0.05f) {
-            val rayCount = 4
-            for (i in 0 until rayCount) {
-                val sway = MathUtils.sin(elapsed * 0.35f + i * 1.3f) * 0.7f
-                val baseX = left + visibleWidth * (0.16f + i * 0.24f) + sway
-                val rayH = visibleHeight * (0.16f + (i % 2) * 0.06f)
-                val segments = 6
-                for (s in 0 until segments) {
-                    val startT = s / segments.toFloat()
-                    val endT = (s + 1) / segments.toFloat()
-                    val alpha = 0.05f * surface * (1f - endT * 0.85f)
-                    val w = 1.3f - endT * 0.6f
-                    val segmentH = rayH * (endT - startT) + 0.05f
-                    batch.setColor(0.75f, 0.95f, 1f, alpha)
-                    batch.draw(uiPixel, baseX - w / 2f, top - rayH * endT, w, segmentH)
-                }
-            }
-            batch.setColor(1f, 1f, 1f, 0.07f * surface)
-            batch.draw(uiPixel, left, top - 2f, visibleWidth, 2f)
-        }
-        batch.setColor(1f, 1f, 1f, 1f)
-    }
-
-    private fun drawAmbientFish() {
-        val visibleCamera = worldCameraTarget
-        val left = worldViewSpec.worldLeft(visibleCamera)
-        val right = worldViewSpec.worldRight(visibleCamera)
-        val top = worldViewSpec.worldTop(visibleCamera)
-        val bottom = worldViewSpec.worldBottom(visibleCamera)
-        val visibleWidth = right - left
-        val visibleHeight = top - bottom
-        val fishCount = 9
-        val scale = if (visibleWidth >= 60f) 1.15f else 0.9f
-        for (i in 0 until fishCount) {
-            val laneFrac = ((i * 29) % 100) / 100f
-            val baseY = bottom + visibleHeight * (0.08f + laneFrac * 0.78f)
-            val speed = 1f + (i % 4) * 0.45f
-            val span = visibleWidth + 9f
-            val dir = if ((i % 2) == 0) 1 else -1
-            val cx = if (dir == 1) {
-                left + (elapsed * speed % span) - 4.5f
-            } else {
-                left + span - (elapsed * speed % span) - 4.5f
-            }
-            val cy = baseY + MathUtils.sin(elapsed * 1.1f + i * 2.1f) * 0.35f
-            val size = (1.1f + (i % 3) * 0.35f) * scale
-            val alpha = 0.10f + (i % 3) * 0.05f
-            batch.setColor(0.7f, 0.9f, 1f, alpha)
-            if (dir == 1) {
-                batch.draw(fishTex, cx, cy, size, size * 0.5f)
-            } else {
-                batch.draw(fishTex, cx + size, cy, -size, size * 0.5f)
-            }
-        }
     }
 
     private fun drawHud() {
@@ -2332,82 +2182,6 @@ class DepthDiverGame : ApplicationAdapter() {
         font.color = Color(0.6f, 0.9f, 1f, alpha)
         font.draw(batch, label, screenWidth / 2f - layout.width / 2f, centerY - (layout.height - font.capHeight) / 2f)
         font.color = Color.WHITE
-    }
-
-    private fun drawBossTelegraph(boss: Hazard.Shark) {
-        val cx = boss.rect.x + boss.rect.width / 2f
-        val cy = boss.rect.y + boss.rect.height / 2f
-        val windupProgress = when (boss.attackPattern) {
-            Hazard.BossPattern.CHARGE -> 1.2f
-            Hazard.BossPattern.SWEEP -> 1.0f
-            Hazard.BossPattern.DIVE -> 1.5f
-            Hazard.BossPattern.PROJECTILE -> 1.0f
-            else -> 0f
-        }
-        if (windupProgress <= 0f || boss.attackTimer >= windupProgress) return
-
-        val progress = (boss.attackTimer / windupProgress).coerceIn(0f, 1f)
-        val intensity = 0.3f + 0.7f * progress
-        val pulse = 0.5f + 0.5f * MathUtils.sin(elapsed * 20f * progress)
-
-        when (boss.attackPattern) {
-            Hazard.BossPattern.CHARGE -> {
-                val dir = if (playerX > cx) 1f else -1f
-                val targetX = if (dir > 0f) WORLD_WIDTH_METERS + 5f else -5f
-                val exclamationX = cx + dir * (boss.rect.width / 2f + 1.5f + pulse * 0.5f)
-                val exclamationY = cy - boss.rect.height / 2f - 1.5f
-                batch.setColor(1f, 0.2f, 0.1f, intensity)
-                font.color = Color(1f, 0.2f, 0.1f, intensity)
-                font.draw(batch, "!", exclamationX - 0.3f, exclamationY + 0.8f)
-                batch.setColor(1f, 0.1f, 0.05f, intensity * 0.5f)
-                batch.draw(uiPixel, cx, cy, (targetX - cx) * progress, boss.rect.height)
-            }
-            Hazard.BossPattern.SWEEP -> {
-                val sweepWidth = WORLD_WIDTH_METERS * 0.8f
-                val startX = boss.rect.width / 2f + 0.5f
-                val endX = WORLD_WIDTH_METERS - startX
-                batch.setColor(1f, 0.5f, 0.1f, intensity * 0.4f)
-                batch.draw(uiPixel, startX, boss.rect.y - 0.2f, sweepWidth, boss.rect.height + 0.4f)
-                val arrowX = cx + (endX - startX) * progress - startX
-                batch.setColor(1f, 0.7f, 0.2f, intensity)
-                batch.draw(uiPixel, arrowX - 0.5f, cy - 0.5f, 1f, 1f)
-            }
-            Hazard.BossPattern.DIVE -> {
-                val warningY = boss.rect.y - boss.rect.height * 2f
-                batch.setColor(1f, 0.15f, 0.05f, intensity * 0.6f)
-                batch.draw(uiPixel, 0f, warningY - 1f, WORLD_WIDTH_METERS, 2f + progress * 5f)
-                val exclamationY = warningY + progress * 5f
-                batch.setColor(1f, 0.2f, 0.1f, intensity)
-                font.color = Color(1f, 0.2f, 0.1f, intensity)
-                font.draw(batch, "⚡", cx - 0.4f, exclamationY)
-            }
-            Hazard.BossPattern.PROJECTILE -> {
-                val arcs = 3
-                for (i in 0 until arcs) {
-                    val angle = (-MathUtils.PI / 3f) + i * (MathUtils.PI / 3f)
-                    val targetX = cx + MathUtils.cos(angle) * 10f
-                    val targetY = boss.rect.y - 10f
-                    batch.setColor(0.8f, 0.4f, 0.1f, intensity * 0.4f)
-                    batch.draw(uiPixel, cx - 0.2f, boss.rect.y - 0.2f, 0.4f, (targetY - boss.rect.y) * progress)
-                }
-            }
-            else -> {}
-        }
-    }
-
-    private fun drawBossHealthBar(boss: Hazard.Shark) {
-        val barWidth = boss.rect.width + 2f
-        val barHeight = 0.35f
-        val barX = boss.rect.x - 1f
-        val barY = boss.rect.y + boss.rect.height + 0.4f
-        val frac = (boss.health / boss.maxHealth).coerceIn(0f, 1f)
-        batch.setColor(0f, 0f, 0f, 0.6f)
-        batch.draw(uiPixel, barX, barY, barWidth, barHeight)
-        batch.setColor(
-            if (frac > 0.5f) Color.GREEN else if (frac > 0.25f) Color.YELLOW else Color.RED
-        )
-        batch.draw(uiPixel, barX, barY, barWidth * frac, barHeight)
-        batch.setColor(1f, 1f, 1f, 1f)
     }
 
     private fun drawAchievementToast() {
