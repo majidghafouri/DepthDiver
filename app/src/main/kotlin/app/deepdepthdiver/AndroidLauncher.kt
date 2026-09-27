@@ -14,6 +14,18 @@ class AndroidLauncher : AndroidApplication() {
     private var backCallback: OnBackInvokedCallback? = null
     private var notificationManager: ChallengeNotificationManager? = null
 
+    // Kept in SharedPreferences rather than a field: an Activity field is lost
+    // on process death, which would re-prompt the player on every cold start.
+    private val notificationPermissionAsked: Boolean
+        get() = getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getBoolean(KEY_ASKED_NOTIFICATIONS, false)
+
+    private fun markNotificationPermissionAsked() {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            .putBoolean(KEY_ASKED_NOTIFICATIONS, true)
+            .apply()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val config = AndroidApplicationConfiguration()
@@ -46,12 +58,43 @@ class AndroidLauncher : AndroidApplication() {
         }
     }
 
+    /**
+     * Android 13+ requires POST_NOTIFICATIONS to be granted at runtime. Without
+     * asking, a fresh install never has it, so every daily/weekly reminder was
+     * silently dropped by the permission check.
+     */
     private fun scheduleChallengeNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission()) {
+            if (notificationPermissionAsked) {
+                // Already asked once and still denied: respect that and stop
+                // prompting instead of nagging on every launch.
+                return
+            }
+            markNotificationPermissionAsked()
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+            return
+        }
+        startNotificationReminders()
+    }
+
+    private fun startNotificationReminders() {
         if (!hasNotificationPermission()) return
         runCatching {
             notificationManager = ChallengeNotificationManager(this)
             notificationManager?.scheduleDailyChallenge()
             notificationManager?.scheduleWeeklyChallenge()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_NOTIFICATIONS) {
+            // Only arm the reminders once the player has actually granted it.
+            startNotificationReminders()
         }
     }
 
@@ -80,5 +123,11 @@ class AndroidLauncher : AndroidApplication() {
         }
         game = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val REQUEST_NOTIFICATIONS = 4201
+        const val PREFS = "depthdiver-notifications"
+        const val KEY_ASKED_NOTIFICATIONS = "askedPostNotifications"
     }
 }
