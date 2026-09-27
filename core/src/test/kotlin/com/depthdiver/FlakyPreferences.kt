@@ -16,6 +16,12 @@ class FlakyPreferences : Preferences {
     private val committed = HashMap<String, Any?>()
     private var pending: MutableMap<String, Any>? = null
 
+    /**
+     * When true, [flush] throws. Simulates a write that cannot reach disk, which
+     * is the failure a run settlement has to survive without losing the run.
+     */
+    var failOnFlush: Boolean = false
+
     override fun putBoolean(key: String, val_: Boolean): Preferences {
         pending().put(key, val_)
         return this
@@ -72,6 +78,7 @@ class FlakyPreferences : Preferences {
     }
 
     override fun flush() {
+        if (failOnFlush) throw IllegalStateException("simulated write failure")
         pending?.let { committed.putAll(it) }
         pending = null
     }

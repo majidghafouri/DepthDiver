@@ -70,7 +70,10 @@ import com.depthdiver.game.WORLD_WIDTH_METERS
 import com.depthdiver.game.WorldViewSpec
 import com.depthdiver.game.backActionFor
 import com.depthdiver.run.BonusCategory
+import com.depthdiver.run.RunLifecycle
 import com.depthdiver.run.RunLedger
+import com.depthdiver.run.RunOutcome
+import com.depthdiver.run.StartupRecovery
 import com.depthdiver.run.RunSettlement
 import com.depthdiver.run.RunTerminalReason
 import kotlin.math.max
@@ -255,7 +258,10 @@ class DepthDiverGame : ApplicationAdapter() {
     private val gameplayClock = FixedStepClock()
     private val fairness = ProceduralFairness()
     private val runSettlement = RunSettlement()
-    private var activeRun: RunLedger? = null
+    private val lifecycle = RunLifecycle(
+        runSettlement,
+        grantPearls = { pearls -> Profile.grantPearls(pearls) },
+    )
     private var frameDelta = 0f
     private var hudPauseCx = 0f
     private var hudPauseCy = 0f
@@ -816,7 +822,7 @@ class DepthDiverGame : ApplicationAdapter() {
         spawnSparkParticles(playerX, playerY, Color.GOLD, 20)
         Gdx.input.vibrate(200)
         val bonus = 200
-        val ledger = activeRun ?: return
+        val ledger = lifecycle.ledger ?: return
         if (awardRunBonus("boss:${ledger.runId}", bonus, BonusCategory.BOSS)) {
             achievementToast = "${Strings.t("bossCleared")} +$bonus"
             achievementToastTimer = 4f
@@ -1085,7 +1091,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun fixedUpdate(delta: Float) {
         if (state != GameState.PLAYING) return
-        val ledger = activeRun ?: return
+        val ledger = lifecycle.ledger ?: return
 
         val gamepadDir = gamepadDirection(padState)
 
@@ -1550,7 +1556,7 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun onBossEscaped() {
-        val ledger = activeRun ?: return
+        lifecycle.ledger ?: return
         achievementToast = Strings.t("bossEscaped")
         achievementToastTimer = 3f
         audio.playAlert()
@@ -1858,11 +1864,8 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun goToMenu() {
         if (state == GameState.PLAYING || state == GameState.PAUSED) {
-            try {
-                abandonActiveRun()
-            } catch (_: Exception) {
-                return
-            }
+            if (lifecycle.ledger != null && lifecycle.abandon(depth, score) == null) return
+            applyOutcome(RunOutcome(depth, score, runPearls, leaderboardMade))
         }
         dispatch(GameAction.MainMenu)
         gameplayClock.reset()
@@ -2295,107 +2298,78 @@ class DepthDiverGame : ApplicationAdapter() {
         bestScore = Profile.bestScore()
     }
 
-    private fun recoverStartupRuns() {
-        try {
-            val recovered = runSettlement.recoverPending()
-            if (recovered != null) refreshBests()
-            val active = runSettlement.active()
-            if (active != null) {
-                runSettlement.abandon(active)
-                activeRun = null
-                refreshBests()
-            }
-        } catch (_: Exception) {
-            activeRun = null
-        }
+    /** Copies a terminal result into the live fields the rest of the game reads. */
+    private fun applyOutcome(outcome: RunOutcome?) {
+        if (outcome == null) return
+        depth = outcome.depth
+        score = outcome.score
+        runPearls = outcome.displayedPearls
+        leaderboardMade = outcome.leaderboardEntered
         refreshBests()
+    }
+
+    private fun recoverStartupRuns() {
+        when (lifecycle.recoverOnStartup()) {
+            is StartupRecovery.Settled -> refreshBests()
+            is StartupRecovery.AbandonedStale -> refreshBests()
+            // A clean start and a failed read both leave the game with no run;
+            // only the abandoned case needed the bests re-read.
+            StartupRecovery.Clean, StartupRecovery.Failed -> Unit
+        }
     }
 
     private fun startRun() {
         if (!flow.accepts(GameAction.StartRun)) return
-        val ledger = try {
-            runSettlement.begin(initialWalletPearls = Profile.pearls())
-        } catch (_: Exception) {
-            return
-        }
+        // Begin before the world reset: if persistence is unhappy the run must
+        // not open at all, and the world must be left exactly as it was.
+        val ledger = lifecycle.begin(Profile.pearls()) ?: return
         resetWorld()
         startBestScore = Profile.bestScore()
-        activeRun = ledger
+        lifecycle.hold(ledger)
         dispatch(GameAction.StartRun)
     }
 
     private fun restartRun() {
         if (!flow.accepts(GameAction.Restart)) return
         if (state == GameState.PLAYING || state == GameState.PAUSED) {
-            try {
-                abandonActiveRun()
-            } catch (_: Exception) {
-                return
-            }
+            if (lifecycle.ledger != null && lifecycle.abandon(depth, score) == null) return
         }
-        val ledger = try {
-            runSettlement.begin(initialWalletPearls = Profile.pearls())
-        } catch (_: Exception) {
-            return
-        }
+        val ledger = lifecycle.begin(Profile.pearls()) ?: return
         resetWorld()
         startBestScore = Profile.bestScore()
-        activeRun = ledger
+        lifecycle.hold(ledger)
         dispatch(GameAction.Restart)
     }
 
-    private fun abandonActiveRun() {
-        val ledger = activeRun ?: return
-        checkpointActiveRun()
-        val result = runSettlement.abandon(ledger)
-        activeRun = null
-        depth = result.depth
-        score = result.score
-        runPearls = result.displayedPearls
-        leaderboardMade = false
-        refreshBests()
-    }
-
-    private fun checkpointActiveRun() {
-        val ledger = activeRun ?: return
-        runSettlement.checkpoint(ledger, depth, score)
-        syncRunMirror()
-    }
-
-    private fun syncRunMirror() {
-        val ledger = activeRun ?: return
-        score = ledger.score
-        runPearls = ledger.displayedPearls
-    }
-
-    private fun awardRunBonus(key: String, pearls: Int, category: BonusCategory): Boolean {
-        val ledger = activeRun ?: return false
-        val awarded = ledger.awardBonus(key, pearls, category)
-        if (awarded <= 0) return false
-        Profile.grantPearls(awarded)
-        checkpointActiveRun()
-        return true
-    }
-
+    /**
+     * Ends the run in progress and moves to the game-over state.
+     *
+     * A failure to settle leaves the run held and pauses instead, so the player
+     * is not dropped into a game-over screen for a dive whose results were never
+     * written.
+     */
     private fun endGame(reason: RunTerminalReason) {
         if (state != GameState.PLAYING) return
-        val ledger = activeRun ?: return
-        val result = try {
-            checkpointActiveRun()
-            runSettlement.settle(ledger, reason)
-        } catch (_: Exception) {
+        if (lifecycle.ledger == null) return
+        val outcome = lifecycle.end(reason, depth, score)
+        if (outcome == null) {
             dispatch(GameAction.Pause)
             return
         }
-        activeRun = null
-        depth = result.depth
-        score = result.score
-        runPearls = result.displayedPearls
-        leaderboardMade = result.leaderboardEntered == true
-        refreshBests()
+        applyOutcome(outcome)
         check(dispatch(GameAction.EndRun))
         audio.playCrash()
     }
+
+    private fun checkpointActiveRun() {
+        val progress = lifecycle.checkpoint(depth, score) ?: return
+        val (mirroredScore, mirroredPearls) = lifecycle.mirror(progress)
+        score = mirroredScore
+        runPearls = mirroredPearls
+    }
+
+    private fun awardRunBonus(key: String, pearls: Int, category: BonusCategory): Boolean =
+        lifecycle.awardBonus(key, pearls, category) > 0
 
     private fun applyUpgrades() {
         maxOxygen = 1f + upgradeOxygenLevel * 0.15f
@@ -2403,7 +2377,9 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun resetWorld(seed: Long? = null) {
-        activeRun = null
+        // The original nulled the active run here, and the callers that open a
+        // fresh one hold their ledger again straight afterwards.
+        lifecycle.detach()
         val difficulty = Profile.difficulty()
         val code = if (seed == null) {
             runSeedProvider.onRunStart(fairness, difficulty)
