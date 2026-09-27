@@ -3,19 +3,20 @@ package com.depthdiver
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Preferences
 import com.badlogic.gdx.audio.Sound
-import com.depthdiver.audio.LayerDirector
-import com.depthdiver.audio.LayerMix
+import com.depthdiver.audio.MusicDirector
+import com.depthdiver.audio.MusicMix
 import com.depthdiver.audio.OnePole
 import com.depthdiver.audio.RateLimiter
 import com.depthdiver.audio.attackDecay
+import com.depthdiver.audio.HEARTBEAT_STRAIN_THRESHOLD
 import com.depthdiver.audio.heartbeatPeriod
+import com.depthdiver.audio.strainFor
 import com.depthdiver.audio.linearFade
 import com.depthdiver.audio.noise
 import com.depthdiver.audio.saw
 import com.depthdiver.audio.sine
 import com.depthdiver.audio.synth
 import java.util.Random
-import kotlin.math.abs
 
 internal fun canStartAmbience(muted: Boolean, playing: Boolean, soundAvailable: Boolean): Boolean =
     !muted && !playing && soundAvailable
@@ -26,7 +27,6 @@ class AudioManager {
     private var oxygen: Sound? = null
     private var crash: Sound? = null
     private var click: Sound? = null
-    private var ambience: Sound? = null
     private var achieve: Sound? = null
     private var alert: Sound? = null
     private var alarm: Sound? = null
@@ -38,15 +38,14 @@ class AudioManager {
     private var bossHit: Sound? = null
     private var levelUp: Sound? = null
     private var heartbeat: Sound? = null
-    private var tensionLayer: Sound? = null
-    private var dangerLayer: Sound? = null
-    private var ambienceId = 0L
-    private var tensionId = 0L
-    private var dangerId = 0L
-    private var ambiencePlaying = false
+    private var musicBed: Sound? = null
+    private var deepPad: Sound? = null
+    private var musicBedId = 0L
+    private var deepPadId = 0L
+    private var musicPlaying = false
     private var initialized = false
     private var prefs: Preferences? = null
-    private val director = LayerDirector()
+    private val director = MusicDirector()
     private val heartbeatGate = RateLimiter(0.25f)
     private var heartbeatTimer = 0f
 
@@ -59,7 +58,7 @@ class AudioManager {
             } else {
                 director.reset()
                 heartbeatTimer = 0f
-                startAmbience()
+                startMusic()
             }
         }
 
@@ -103,10 +102,9 @@ class AudioManager {
         bossHit = loadBossHit()
         levelUp = loadLevelUp()
         heartbeat = loadHeartbeat()
-        ambience = generateAmbience()
-        tensionLayer = generateTensionLayer()
-        dangerLayer = generateDangerLayer()
-        if (!muted) startAmbience()
+        musicBed = generateMusicBed()
+        deepPad = generateDeepPad()
+        if (!muted) startMusic()
     }
 
     fun updateVolumes() {
@@ -119,24 +117,27 @@ class AudioManager {
         muted = prefs?.getBoolean("muted", false) ?: false
     }
 
-    fun updateMusic(targetIntensity: Float, dt: Float) {
+    fun updateMusic(depthFactor: Float, oxygenRatio: Float, dt: Float) {
         if (dt <= 0f) return
         if (muted) {
             director.update(0f, dt)
             return
         }
-        val mix = director.update(targetIntensity, dt)
-        if (!ambiencePlaying) return
+        val mix = director.update(depthFactor, dt)
+        if (!musicPlaying) return
         applyMix(mix)
-        val danger = mix.danger
-        if (danger < 0.15f) {
+
+        // Air trouble is a moment-to-moment cue, not a layer of the soundtrack:
+        // the heartbeat only surfaces once the player is genuinely low.
+        val strain = strainFor(oxygenRatio)
+        if (strain < HEARTBEAT_STRAIN_THRESHOLD) {
             heartbeatTimer = 0f
             return
         }
         heartbeatTimer -= dt
         if (heartbeatTimer > 0f) return
-        heartbeatTimer = heartbeatPeriod(danger)
-        if (heartbeatGate.allow(mix.danger)) playHeartbeat(danger)
+        heartbeatTimer = heartbeatPeriod(strain)
+        if (heartbeatGate.allow(strain)) playHeartbeat(strain)
     }
 
     fun stopMusic() {
@@ -144,31 +145,27 @@ class AudioManager {
         heartbeatTimer = 0f
     }
 
-    private fun startAmbience() {
-        if (!canStartAmbience(muted, ambiencePlaying, ambience != null)) return
-        ambienceId = ambience?.loop(0f) ?: 0L
-        tensionId = tensionLayer?.loop(0f) ?: 0L
-        dangerId = dangerLayer?.loop(0f) ?: 0L
-        ambiencePlaying = true
+    private fun startMusic() {
+        if (!canStartAmbience(muted, musicPlaying, musicBed != null)) return
+        musicBedId = musicBed?.loop(0f) ?: 0L
+        deepPadId = deepPad?.loop(0f) ?: 0L
+        musicPlaying = true
         applyMix()
     }
 
     private fun stopLoops() {
-        if (ambienceId != 0L) ambience?.stop(ambienceId)
-        if (tensionId != 0L) tensionLayer?.stop(tensionId)
-        if (dangerId != 0L) dangerLayer?.stop(dangerId)
-        ambienceId = 0L
-        tensionId = 0L
-        dangerId = 0L
-        ambiencePlaying = false
+        if (musicBedId != 0L) musicBed?.stop(musicBedId)
+        if (deepPadId != 0L) deepPad?.stop(deepPadId)
+        musicBedId = 0L
+        deepPadId = 0L
+        musicPlaying = false
     }
 
-    private fun applyMix(mix: LayerMix = director.mix) {
-        if (!ambiencePlaying) return
+    private fun applyMix(mix: MusicMix = director.mix) {
+        if (!musicPlaying) return
         val volume = masterVolume * musicVolume
-        if (ambienceId != 0L) ambience?.setVolume(ambienceId, (mix.calm * volume).coerceIn(0f, 1f))
-        if (tensionId != 0L) tensionLayer?.setVolume(tensionId, (mix.tension * volume).coerceIn(0f, 1f))
-        if (dangerId != 0L) dangerLayer?.setVolume(dangerId, (mix.danger * volume).coerceIn(0f, 1f))
+        if (musicBedId != 0L) musicBed?.setVolume(musicBedId, (mix.bed * volume).coerceIn(0f, 1f))
+        if (deepPadId != 0L) deepPad?.setVolume(deepPadId, (mix.deep * volume).coerceIn(0f, 1f))
     }
 
     fun toggleMute() {
@@ -220,9 +217,9 @@ class AudioManager {
     fun dispose() {
         stopLoops()
         for (sound in listOf(
-            pickup, oxygen, crash, click, ambience, achieve, alert, alarm,
+            pickup, oxygen, crash, click, achieve, alert, alarm,
             shield, shieldBreak, combo, countdown, bossRoar, bossHit, levelUp, heartbeat,
-            tensionLayer, dangerLayer
+            musicBed, deepPad
         )) {
             sound?.dispose()
         }
@@ -230,7 +227,6 @@ class AudioManager {
         oxygen = null
         crash = null
         click = null
-        ambience = null
         achieve = null
         alert = null
         alarm = null
@@ -242,8 +238,8 @@ class AudioManager {
         bossHit = null
         levelUp = null
         heartbeat = null
-        tensionLayer = null
-        dangerLayer = null
+        musicBed = null
+        deepPad = null
         director.reset()
         heartbeatGate.reset()
         prefs = null
@@ -313,45 +309,71 @@ class AudioManager {
         (sine(t, 62f) * 0.7f * first) + (sine(t, 54f) * 0.5f * second)
     })
 
-    private fun generateAmbience(): Sound? =
-        writeSound("ambience", synth(14f) { t, _ ->
-            val tide = 0.7f + 0.3f * sine(t, 0.08f)
-            var wave = (sine(t, 55f) * 0.30f + sine(t, 110f) * 0.11f) * tide
-            val blipAge = t % 3.4f
-            if (blipAge < 0.4f) {
-                wave += sine(blipAge, 380f + 900f * blipAge) * (1f - blipAge / 0.4f) * 0.16f
-            }
-            wave
-        })
+    /**
+     * The soundtrack's constant floor: a slow four-chord pad, roughly one chord
+     * every six seconds, with soft overlapping envelopes so the loop point is
+     * inaudible. Pure sine partials keep it soft -- no rumble, no percussion,
+     * nothing that builds as the run gets deeper.
+     */
+    private fun generateMusicBed(): Sound? = writeSound("music-bed", synth(MUSIC_LOOP_SECONDS) { t, _ ->
+        val chordIndex = (t / MUSIC_CHORD_SECONDS).toInt() % CHORDS.size
+        val local = t % MUSIC_CHORD_SECONDS
+        // Each voice swells in and releases so chords breathe into each other.
+        val voice = linearFade(local, MUSIC_CHORD_SECONDS, MUSIC_CHORD_SECONDS * 0.42f, MUSIC_CHORD_SECONDS * 0.42f)
+        val tide = 0.82f + 0.18f * sine(t, 0.045f)
 
-    private fun generateTensionLayer(): Sound? =
-        writeSound("music-tension", synth(12f) { t, _ ->
-            val pulse = 0.55f + 0.45f * abs(sine(t, 1.5f))
-            val drone = (saw(t, 82.5f) * 0.22f + sine(t, 123.5f) * 0.14f) * pulse
-            val shimmer = if (t % 1.5f < 0.5f) {
-                val local = t % 1.5f
-                sine(local, 660f + 40f * local) * attackDecay(local, 0.5f, 0.02f, 2.6f) * 0.12f
-            } else {
-                0f
-            }
-            val env = linearFade(t, 12f, 0.8f, 0.8f)
-            (drone + shimmer) * env
-        })
+        // A soft low root under the chords. The pad alone measured with no
+        // energy below 80Hz and read as thin; this restores the weight that
+        // made the old drone feel soothing, without any of its noise.
+        val root = sine(t, ROOT) * 0.26f + sine(t, ROOT * 1.5f) * 0.08f
 
-    private fun generateDangerLayer(): Sound? =
-        writeSound("music-danger", synth(12f) { t, i ->
-            val random = Random(101L + i / 128)
-            val filter = OnePole(0.12f)
-            val tremolo = 0.6f + 0.4f * sine(t, 3.2f)
-            val rumble = filter.next(noise(random)) * 0.22f
-            val dissonant = (sine(t, 311f) * 0.10f + sine(t, 329.6f) * 0.10f) * tremolo
-            val ticks = if (t % 0.75f < 0.08f) {
-                val local = t % 0.75f
-                sine(local, 900f) * attackDecay(local, 0.08f, 0.002f, 3f) * 0.10f
-            } else {
-                0f
+        var wave = root
+        for ((index, freq) in CHORDS[chordIndex].withIndex()) {
+            // A touch of detune between the two low voices gives slow beating.
+            val detune = if (index == 0) 1.0035f else 1f
+            val amp = 0.28f / (1f + index * 0.45f)
+            wave += (sine(t, freq * detune) * 0.78f + sine(t, freq * 2f) * 0.22f) * amp
+        }
+        wave * voice * tide
+    })
+
+    /**
+     * A quiet sustained pad that opens up slowly with depth. Stays musical --
+     * long held fifths and an occasional soft bell -- so descending deep reads
+     * as wider and darker rather than louder and noisier.
+     */
+    private fun generateDeepPad(): Sound? = writeSound("music-deep", synth(MUSIC_LOOP_SECONDS) { t, _ ->
+        val tide = 0.7f + 0.3f * sine(t, 0.031f)
+        val held = sine(t, DEEP_ROOT) * 0.34f + sine(t, DEEP_ROOT * 1.5f) * 0.22f + sine(t, DEEP_ROOT * 2f) * 0.12f
+
+        // Sparse bell tones, so the layer has something to listen to rather
+        // than just sitting there as a drone.
+        var bells = 0f
+        for (i in 0 until 4) {
+            val at = i * (MUSIC_LOOP_SECONDS / 4f) + 1.7f
+            val age = t - at
+            if (age in 0f..3.2f) {
+                val note = DEEP_ROOT * (if (i % 2 == 0) 4f else 3f)
+                bells += (sine(age, note) * 0.6f + sine(age, note * 2.01f) * 0.16f) *
+                    attackDecay(age, 3.2f, 0.02f, 1.1f) * 0.10f
             }
-            val env = linearFade(t, 12f, 0.5f, 0.5f)
-            (sine(t, 55f) * 0.26f * tremolo + rumble + dissonant + ticks) * env
-        })
+        }
+        (held * tide + bells) * 0.8f
+    })
+
+    private companion object {
+        /** 24s at 22050Hz mono 16-bit is ~1MB per loop, generated once at boot. */
+        const val MUSIC_LOOP_SECONDS = 24f
+        const val MUSIC_CHORD_SECONDS = 6f
+        const val DEEP_ROOT = 110f
+        const val ROOT = 55f
+
+        /** Am7 - Fmaj7 - Cmaj7 - Gsus2: all consonant, none of them tense. */
+        val CHORDS = arrayOf(
+            floatArrayOf(110f, 130.81f, 164.81f, 196f),
+            floatArrayOf(87.31f, 130.81f, 164.81f, 220f),
+            floatArrayOf(130.81f, 164.81f, 196f, 246.94f),
+            floatArrayOf(98f, 146.83f, 196f, 220f),
+        )
+    }
 }

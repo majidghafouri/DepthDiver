@@ -15,7 +15,7 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
-import com.depthdiver.audio.intensityFor
+import com.depthdiver.audio.musicDepthFactor
 import com.depthdiver.common.Particle
 import com.depthdiver.common.Particle.ParticleType
 import com.depthdiver.common.Strings
@@ -737,7 +737,11 @@ class DepthDiverGame : ApplicationAdapter() {
         if (dt <= 0f) return
         if (state == GameState.PLAYING) {
             val oxygenRatio = if (maxOxygen > 0f) oxygen / maxOxygen else 1f
-            audio.updateMusic(intensityFor(depth, MUSIC_DEPTH_SCALE, oxygenRatio, bossWarning > 0f), dt)
+            audio.updateMusic(
+                musicDepthFactor(depth, MUSIC_DEPTH_SCALE),
+                oxygenRatio,
+                dt,
+            )
         } else {
             audio.stopMusic()
         }

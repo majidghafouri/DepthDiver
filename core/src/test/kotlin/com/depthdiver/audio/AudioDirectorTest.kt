@@ -50,27 +50,20 @@ class AudioDirectorTest {
     }
 
     @Test
-    fun intensityGrowsWithDepthAndOxygenStrain() {
-        val shallowFullAir = intensityFor(0f, 200f, 1f, bossActive = false)
-        val deepFullAir = intensityFor(200f, 200f, 1f, bossActive = false)
-        val shallowLowAir = intensityFor(0f, 200f, 0.2f, bossActive = false)
-        assertEquals(0f, shallowFullAir, 1e-4f)
-        assertTrue(deepFullAir > shallowFullAir)
-        assertTrue(shallowLowAir > shallowFullAir)
+    fun musicDepthFactorGrowsWithDepthAndClamps() {
+        assertEquals(0f, musicDepthFactor(0f, 200f), 1e-4f)
+        assertEquals(0.5f, musicDepthFactor(100f, 200f), 1e-4f)
+        assertEquals(1f, musicDepthFactor(9999f, 200f), 1e-4f)
+        assertEquals(0f, musicDepthFactor(-50f, 200f), 1e-4f)
     }
 
     @Test
-    fun bossForcesHighIntensity() {
-        val calm = intensityFor(0f, 200f, 1f, bossActive = false)
-        val boss = intensityFor(0f, 200f, 1f, bossActive = true)
-        assertTrue(boss >= 0.85f)
-        assertTrue(boss > calm)
-    }
-
-    @Test
-    fun intensityStaysInUnitRange() {
-        assertEquals(1f, intensityFor(1000f, 200f, 0f, bossActive = true), 1e-4f)
-        assertEquals(0f, intensityFor(-50f, 0f, 2f, bossActive = false), 1e-4f)
+    fun strainRisesAsOxygenFalls() {
+        assertEquals(0f, strainFor(1f), 1e-4f)
+        assertEquals(1f, strainFor(0f), 1e-4f)
+        assertTrue(strainFor(0.2f) > strainFor(0.8f))
+        assertEquals(0f, strainFor(1.5f), 1e-4f)
+        assertEquals(1f, strainFor(-1f), 1e-4f)
     }
 
     @Test
@@ -83,36 +76,71 @@ class AudioDirectorTest {
     }
 
     @Test
-    fun mixLayersAreOrderedAndMutuallyReasonable() {
-        val calmMix = LayerMixer.mixFor(0f)
-        val dangerMix = LayerMixer.mixFor(1f)
-        assertEquals(1f, calmMix.calm, 1e-4f)
-        assertEquals(0f, calmMix.tension, 1e-4f)
-        assertEquals(0f, calmMix.danger, 1e-4f)
-        assertTrue(dangerMix.tension > calmMix.tension)
-        assertTrue(dangerMix.danger > calmMix.danger)
-        assertTrue(dangerMix.calm < calmMix.calm)
+    fun bedStaysCalmAcrossTheWholeDepthRange() {
+        // The regression this replaces: the bed used to thin out as the danger
+        // layer came up. It must never drop below the floor.
+        val shallow = MusicMixer.mixFor(0f)
+        val middle = MusicMixer.mixFor(0.5f)
+        val deepest = MusicMixer.mixFor(1f)
+        assertTrue(shallow.bed >= MusicMixer.BED_FLOOR - 1e-4f)
+        assertTrue(middle.bed >= MusicMixer.BED_FLOOR - 1e-4f)
+        assertTrue(deepest.bed >= MusicMixer.BED_FLOOR - 1e-4f)
     }
 
     @Test
-    fun layerDirectorRisesQuicklyAndFallsSlowly() {
-        val director = LayerDirector(riseRate = 4f, fallRate = 0.5f)
-        director.update(1f, 0.25f)
-        val risen = director.intensity
-        assertTrue(risen > 0.5f)
-        val calmDown = LayerDirector(riseRate = 4f, fallRate = 0.5f)
-        calmDown.update(1f, 0.25f)
-        calmDown.update(0f, 0.25f)
-        assertTrue(calmDown.intensity < risen)
+    fun deepPadOpensUpAsDepthIncreases() {
+        val shallow = MusicMixer.mixFor(0f)
+        val deep = MusicMixer.mixFor(1f)
+        assertEquals(0f, shallow.deep, 1e-4f)
+        assertTrue(deep.deep > shallow.deep)
     }
 
     @Test
-    fun layerDirectorResetsToSilence() {
-        val director = LayerDirector()
-        director.update(1f, 1f)
+    fun mixIsMonotonicInDepth() {
+        var previous = MusicMixer.mixFor(0f)
+        var step = 0.05f
+        while (step <= 1.0001f) {
+            val current = MusicMixer.mixFor(step)
+            assertTrue("deep dipped at $step", current.deep >= previous.deep - 1e-4f)
+            previous = current
+            step += 0.05f
+        }
+    }
+
+    @Test
+    fun musicRespondsSlowlyInBothDirections() {
+        val rise = MusicDirector()
+        rise.update(1f, 0.25f)
+        assertTrue(
+            "pad opened ${rise.depthFactor} in 0.25s; it should creep, not swell",
+            rise.depthFactor < 0.2f
+        )
+        val fall = MusicDirector()
+        fall.update(1f, 30f)
+        val opened = fall.depthFactor
+        fall.update(0f, 0.25f)
+        assertTrue("pad should ease back down slowly", fall.depthFactor < opened)
+    }
+
+    @Test
+    fun musicDirectorResetsToShallowMix() {
+        val director = MusicDirector()
+        director.update(1f, 10f)
         director.reset()
-        assertEquals(0f, director.intensity, 1e-4f)
-        assertEquals(0f, director.mix.tension, 1e-4f)
+        assertEquals(0f, director.depthFactor, 1e-4f)
+        assertEquals(0f, director.mix.deep, 1e-4f)
+        assertEquals(MusicMixer.mixFor(0f).bed, director.mix.bed, 1e-4f)
+    }
+
+    @Test
+    fun heartbeatOnlySurfacesWhenAirIsActuallyLow() {
+        // Guards the direction: a double strainFor() inversion used to make the
+        // heartbeat play at full oxygen and stay silent when air ran out.
+        fun urgent(oxygenRatio: Float) = strainFor(oxygenRatio) >= HEARTBEAT_STRAIN_THRESHOLD
+        assertFalse("heartbeat must stay silent at full oxygen", urgent(1f))
+        assertFalse(urgent(0.8f))
+        assertTrue("heartbeat must surface when air is low", urgent(0.2f))
+        assertTrue(urgent(0f))
     }
 
     @Test
