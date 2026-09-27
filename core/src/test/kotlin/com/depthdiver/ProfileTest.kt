@@ -101,4 +101,38 @@ class ProfileTest {
         assertTrue(Profile.abandonedRunApplied("run-2"))
         assertFalse(Profile.completedRunApplied("run-2"))
     }
+
+    @Test
+    fun musicAndSfxMuteIndependently() {
+        assertFalse(Profile.musicMuted())
+        assertFalse(Profile.sfxMuted())
+
+        Profile.setMusicMuted(true)
+        assertTrue(!Profile.sfxMuted(), "music mute must not silence effects")
+        assertFalse(Profile.allAudioMuted(), "a silent music channel is not a fully muted app")
+
+        Profile.setSfxMuted(true)
+        assertTrue(Profile.allAudioMuted())
+
+        Profile.setMusicMuted(false)
+        assertFalse(Profile.allAudioMuted())
+    }
+
+    @Test
+    fun muteStateIsStoredRatherThanCachedOnTheObject() {
+        val store = TestPreferences("depthdiver")
+        Profile.prefsOverride = store
+        Profile.setMusicMuted(true)
+
+        // A different backing store must not see the flag, which proves the
+        // value was written through instead of held in a field on Profile.
+        Profile.prefsOverride = TestPreferences("other")
+        assertFalse(Profile.musicMuted())
+
+        // Reopening the original store is what a relaunch does: music is still
+        // off, effects were never touched.
+        Profile.prefsOverride = store
+        assertTrue(Profile.musicMuted())
+        assertFalse(Profile.sfxMuted())
+    }
 }

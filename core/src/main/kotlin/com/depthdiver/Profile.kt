@@ -327,6 +327,29 @@ object Profile {
         p.putFloat("musicVolume", v.coerceIn(0f, 1f))
         p.flush()
     }
+
+    /**
+     * Music and sound effects are muted independently: someone may want the
+     * calm bed playing with the effects silenced, or the reverse.
+     */
+    fun musicMuted(): Boolean = prefs().getBoolean("musicMuted", false)
+
+    fun setMusicMuted(muted: Boolean) {
+        val p = prefs()
+        p.putBoolean("musicMuted", muted)
+        p.flush()
+    }
+
+    fun sfxMuted(): Boolean = prefs().getBoolean("sfxMuted", false)
+
+    fun setSfxMuted(muted: Boolean) {
+        val p = prefs()
+        p.putBoolean("sfxMuted", muted)
+        p.flush()
+    }
+
+    /** True only when both channels are off, for the quick master toggle. */
+    fun allAudioMuted(): Boolean = musicMuted() && sfxMuted()
     
     /** Reduce motion: disable screen shake, particles, vignette pulse. */
     fun reduceMotion(): Boolean = prefs().getBoolean("reduceMotion", false)

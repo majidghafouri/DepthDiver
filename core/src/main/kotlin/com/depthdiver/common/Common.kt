@@ -45,7 +45,7 @@ object Strings {
         "weeklyDesc" to "Complete 3 daily challenges this week",
         "reward" to "Reward",
         // Settings
-        "settings" to "SETTINGS", "masterVolume" to "MASTER VOLUME", "sfxVolume" to "SFX VOLUME",
+        "settings" to "SETTINGS", "muted" to "MUTED", "masterVolume" to "MASTER VOLUME", "sfxVolume" to "SFX VOLUME",
         "musicVolume" to "MUSIC VOLUME", "reduceMotion" to "REDUCE MOTION",
         "highContrast" to "HIGH CONTRAST", "screenShake" to "SCREEN SHAKE",
         "on" to "ON", "off" to "OFF",
@@ -83,7 +83,7 @@ object Strings {
         "weeklyDesc" to "Completa 3 desafíos diarios esta semana",
         "reward" to "Recompensa",
         // Settings
-        "settings" to "AJUSTES", "masterVolume" to "VOLUMEN MAESTRO", "sfxVolume" to "VOLUMEN EFECTOS",
+        "settings" to "AJUSTES", "muted" to "SILENCIADO", "masterVolume" to "VOLUMEN MAESTRO", "sfxVolume" to "VOLUMEN EFECTOS",
         "musicVolume" to "VOLUMEN MÚSICA", "reduceMotion" to "REDUCIR MOVIMIENTO",
         "highContrast" to "ALTO CONTRASTE", "screenShake" to "VIBRACIÓN PANTALLA",
         "on" to "ACTIVADO", "off" to "DESACTIVADO",

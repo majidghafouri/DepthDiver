@@ -1482,6 +1482,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     when (state) {
                         GameState.SHOP -> handleShopTouch(touchX(), touchY())
                         GameState.PROFILE -> handleProfileTouch(touchX(), touchY())
+                        GameState.SETTINGS -> handleSettingsTouch(touchX(), touchY())
                         else -> handleSubScreenTouch(touchX(), touchY())
                     }
                 }
@@ -1548,6 +1549,7 @@ class DepthDiverGame : ApplicationAdapter() {
         Strings.t("profile"),
         Strings.t("leaderboard"),
         Strings.t("shop"),
+        Strings.t("settings"),
         if (audio.muted) Strings.t("muteOn") else Strings.t("muteOff"),
         Strings.t("quit")
     )
@@ -1619,8 +1621,32 @@ class DepthDiverGame : ApplicationAdapter() {
             1 -> dispatch(GameAction.OpenProfile)
             2 -> dispatch(GameAction.OpenLeaderboard)
             3 -> dispatch(GameAction.OpenShop)
-            4 -> audio.toggleMute()
-            5 -> Gdx.app.exit()
+            4 -> dispatch(GameAction.OpenSettings)
+            5 -> audio.toggleMute()
+            6 -> Gdx.app.exit()
+        }
+    }
+
+    private fun handleSettingsTouch(tx: Float, ty: Float) {
+        val back = backPill()
+        if (Widgets.contains(tx, ty, back.cx, back.cy, back.w, back.h)) {
+            goToMenu()
+            return
+        }
+        val panel = settingsPanel()
+        val lineGap = min(50f, panel.h / 8f)
+        val startY = panel.cy + panel.h / 2f - 30f
+
+        val musicRow = audioToggleRow(panel, startY)
+        if (Widgets.contains(tx, ty, musicRow.cx, musicRow.cy, musicRow.w, musicRow.h)) {
+            audio.toggleMusicMute()
+            audio.playClick()
+            return
+        }
+        val sfxRow = audioToggleRow(panel, startY - lineGap)
+        if (Widgets.contains(tx, ty, sfxRow.cx, sfxRow.cy, sfxRow.w, sfxRow.h)) {
+            audio.toggleSfxMute()
+            audio.playClick()
         }
     }
 
@@ -2381,29 +2407,31 @@ class DepthDiverGame : ApplicationAdapter() {
         val lineGap = min(50f, panel.h / 8f)
         val startY = panel.cy + panel.h / 2f - 30f
 
-        // Master volume
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("masterVolume"), panel.cx - panel.w / 2f + 30f, startY)
-        val masterVol = Profile.masterVolume()
-        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, startY, 
-            "${(Profile.masterVolume() * 100).toInt()}%", enabled = true)
-
-        // SFX volume
-        val sfxY = startY - lineGap
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("sfxVolume"), panel.cx - panel.w / 2f + 30f, sfxY)
-        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, sfxY,
-            "${(Profile.sfxVolume() * 100).toInt()}%", enabled = true)
-
-        // Music volume
-        val musicY = sfxY - lineGap
+        // Music: a working mute toggle, with the level shown alongside it.
+        val musicY = startY
         font.color = Color.WHITE
         Widgets.textLeft(batch, font, Strings.t("musicVolume"), panel.cx - panel.w / 2f + 30f, musicY)
-        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, musicY,
-            "${(Profile.musicVolume() * 100).toInt()}%", enabled = true)
+        Widgets.pill(batch, font, uiPixel, audioToggleX(panel), musicY,
+            if (audio.musicMuted) Strings.t("muted") else "${(Profile.musicVolume() * 100).toInt()}%",
+            enabled = true)
+
+        // Sound effects: independent from music.
+        val sfxY = musicY - lineGap
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("sfxVolume"), panel.cx - panel.w / 2f + 30f, sfxY)
+        Widgets.pill(batch, font, uiPixel, audioToggleX(panel), sfxY,
+            if (audio.sfxMuted) Strings.t("muted") else "${(Profile.sfxVolume() * 100).toInt()}%",
+            enabled = true)
+
+        // Master level, shown for reference.
+        val masterY = sfxY - lineGap
+        font.color = Color.WHITE
+        Widgets.textLeft(batch, font, Strings.t("masterVolume"), panel.cx - panel.w / 2f + 30f, masterY)
+        Widgets.pill(batch, font, uiPixel, audioToggleX(panel), masterY,
+            "${(Profile.masterVolume() * 100).toInt()}%", enabled = true)
 
         // Reduce motion
-        val reduceMotionY = musicY - lineGap
+        val reduceMotionY = masterY - lineGap
         font.color = Color.WHITE
         Widgets.textLeft(batch, font, Strings.t("reduceMotion"), panel.cx - panel.w / 2f + 30f, reduceMotionY)
         Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, reduceMotionY,
@@ -2427,6 +2455,19 @@ class DepthDiverGame : ApplicationAdapter() {
             enabled = true)
 
         font.color = Color.WHITE
+    }
+
+    /** Centre-x of the audio toggle pills, kept off the right panel edge. */
+    private fun audioToggleX(panel: ShopRect): Float = panel.cx + panel.w / 2f - 60f
+
+    /**
+     * Hit boxes for the two audio toggles. These used to be decorative pills:
+     * the settings screen advertised volume controls that could not be touched.
+     */
+    private fun audioToggleRow(panel: ShopRect, y: Float): ShopRect {
+        val w = Widgets.pillW(font, Strings.t("muted"), uiScale.factor)
+        val h = Widgets.pillH(font, "W", uiScale.factor)
+        return ShopRect(audioToggleX(panel), y, w, h)
     }
 
     private fun settingsPanel(): ShopRect {

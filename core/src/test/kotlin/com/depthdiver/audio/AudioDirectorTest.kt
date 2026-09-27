@@ -1,5 +1,6 @@
 package com.depthdiver.audio
 
+import com.depthdiver.masterMuteTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -188,5 +189,15 @@ class AudioDirectorTest {
         val second = filter.next(1f)
         assertTrue(first > 0f)
         assertTrue(second > first)
+    }
+
+    @Test
+    fun masterToggleMutesBothButUnmuteIsSymmetric() {
+        // Nothing muted: the quick toggle silences everything.
+        assertEquals(true to true, masterMuteTarget(false, false))
+        // One channel already muted: still nothing audible, so keep both off.
+        assertEquals(true to true, masterMuteTarget(true, false))
+        // Both off: the toggle turns them back on together.
+        assertEquals(false to false, masterMuteTarget(true, true))
     }
 }

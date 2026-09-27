@@ -21,6 +21,10 @@ import java.util.Random
 internal fun canStartAmbience(muted: Boolean, playing: Boolean, soundAvailable: Boolean): Boolean =
     !muted && !playing && soundAvailable
 
+/** The quick menu toggle silences whichever channel is still audible. */
+internal fun masterMuteTarget(musicMuted: Boolean, sfxMuted: Boolean): Pair<Boolean, Boolean> =
+    if (musicMuted && sfxMuted) (false to false) else (true to true)
+
 class AudioManager {
 
     private var pickup: Sound? = null
@@ -49,18 +53,31 @@ class AudioManager {
     private val heartbeatGate = RateLimiter(0.25f)
     private var heartbeatTimer = 0f
 
-    var muted: Boolean = false
+    var musicMuted: Boolean = false
         set(value) {
+            if (field == value) return
             field = value
-            prefs?.putBoolean("muted", value)?.flush()
+            Profile.setMusicMuted(value)
+            prefs?.putBoolean("musicMuted", value)?.flush()
             if (value) {
-                stopLoops()
+                stopMusicLoops()
             } else {
                 director.reset()
-                heartbeatTimer = 0f
                 startMusic()
             }
         }
+
+    var sfxMuted: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            Profile.setSfxMuted(value)
+            prefs?.putBoolean("sfxMuted", value)?.flush()
+        }
+
+    /** True when neither music nor effects can be heard. */
+    val muted: Boolean
+        get() = musicMuted && sfxMuted
 
     var masterVolume: Float = 1f
         set(value) {
@@ -83,7 +100,10 @@ class AudioManager {
         if (initialized) return
         initialized = true
         prefs = Gdx.app.getPreferences("depthdiver-settings")
-        muted = prefs?.getBoolean("muted", false) ?: false
+        // Profile owns the persisted truth; the libGDX prefs copy is kept in
+        // step for anything still reading the legacy key.
+        musicMuted = Profile.musicMuted()
+        sfxMuted = Profile.sfxMuted()
         masterVolume = Profile.masterVolume()
         sfxVolume = Profile.sfxVolume()
         musicVolume = Profile.musicVolume()
@@ -114,12 +134,13 @@ class AudioManager {
     }
 
     fun updateMuted() {
-        muted = prefs?.getBoolean("muted", false) ?: false
+        musicMuted = Profile.musicMuted()
+        sfxMuted = Profile.sfxMuted()
     }
 
     fun updateMusic(depthFactor: Float, oxygenRatio: Float, dt: Float) {
         if (dt <= 0f) return
-        if (muted) {
+        if (musicMuted) {
             director.update(0f, dt)
             return
         }
@@ -146,14 +167,14 @@ class AudioManager {
     }
 
     private fun startMusic() {
-        if (!canStartAmbience(muted, musicPlaying, musicBed != null)) return
+        if (!canStartAmbience(musicMuted, musicPlaying, musicBed != null)) return
         musicBedId = musicBed?.loop(0f) ?: 0L
         deepPadId = deepPad?.loop(0f) ?: 0L
         musicPlaying = true
         applyMix()
     }
 
-    private fun stopLoops() {
+    private fun stopMusicLoops() {
         if (musicBedId != 0L) musicBed?.stop(musicBedId)
         if (deepPadId != 0L) deepPad?.stop(deepPadId)
         musicBedId = 0L
@@ -168,8 +189,19 @@ class AudioManager {
         if (deepPadId != 0L) deepPad?.setVolume(deepPadId, (mix.deep * volume).coerceIn(0f, 1f))
     }
 
+    /** Quick master toggle for the menu and the M key. */
     fun toggleMute() {
-        muted = !muted
+        val (music, sfx) = masterMuteTarget(musicMuted, sfxMuted)
+        musicMuted = music
+        sfxMuted = sfx
+    }
+
+    fun toggleMusicMute() {
+        musicMuted = !musicMuted
+    }
+
+    fun toggleSfxMute() {
+        sfxMuted = !sfxMuted
     }
 
     fun playPickup() = playSound(pickup, 0.6f)
@@ -208,14 +240,14 @@ class AudioManager {
     }
 
     private fun playSound(sound: Sound?, gain: Float) {
-        if (muted) return
+        if (sfxMuted) return
         val volume = gain * masterVolume * sfxVolume
         if (volume <= 0f) return
         sound?.play(volume.coerceIn(0f, 1f))
     }
 
     fun dispose() {
-        stopLoops()
+        stopMusicLoops()
         for (sound in listOf(
             pickup, oxygen, crash, click, achieve, alert, alarm,
             shield, shieldBreak, combo, countdown, bossRoar, bossHit, levelUp, heartbeat,
