@@ -60,23 +60,26 @@
 
 ## Active Phase
 
-### Phase 10: Gameplay Polish & Content (IN PROGRESS)
+### Phase 10: Gameplay Polish & Content (COMPLETE)
 - [x] Visual polish: particle effects enhancement, screen shake refinement, vignette pulse (`2b3edbf`)
 - [x] Audio: more SFX variety, dynamic music layers (`ea23789`)
-- [x] Content: new hazard types (angler, vortex), five biomes with blended water color and hazard mixes
-- [x] Boss mechanics: 4 attack patterns with windup telegraphing, health system, damage feedback (`302e837`)
+- [x] Content: new hazard types (angler, vortex), five biomes with blended water color and hazard mixes (`302e837`)
+- [x] Boss mechanics: 4 attack patterns with windup telegraphing, health system, damage feedback (`342a12e`)
 
-### Phase 11: Social/Retention Features
-- [ ] Online leaderboards (Google Play Games / Game Center)
-- [ ] Cloud save/sync across devices
-- [ ] Friend challenges / shareable run seeds
-- [ ] Daily/weekly challenge notifications
+### Phase 11: Social/Retention Features (SEAM READY, BACKEND PENDING)
+- [x] Online leaderboards: `LeaderboardService` seam + local-first impl; GPGS stubbed (`75e0a04`)
+- [x] Cloud save/sync: `CloudSaveService` seam; GPGS Saved Games stubbed (`2aa878b`)
+- [x] Friend challenges / shareable run seeds (`cffa553`)
+- [x] Daily/weekly challenge notifications (`4738a1c`)
+- [ ] **Blocked:** real cloud backends need the `play-services-games` artifact, which
+      404s on Maven Central. The seams are ready; only the dependency is missing.
 
-### Phase 12: Platform Polish
-- [ ] iOS build / App Store preparation
-- [ ] Web build (libGDX HTML5 backend)
-- [ ] Tablet/landscape optimizations
-- [ ] Controller/gamepad support
+### Phase 12: Platform Polish (PARTIAL)
+- [x] Tablet/landscape optimizations: `UiScale`, scaled fonts/gaps, accessible touch targets (`9bb1c4d`)
+- [x] Controller/gamepad support: pure input mapping + optional runtime bridge (`dcbcd11`)
+  - Bridge is inert until `gdx-controllers` is on the classpath (separate artifact, unavailable offline)
+- [ ] iOS build preparation (docs/config)
+- [ ] **Blocked:** Web build — `gdx-backend-gwt` needs GWT artifacts that do not resolve here
 
 ### Phase 13: Content Pipeline
 - [ ] Level/biome editor tooling
