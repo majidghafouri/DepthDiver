@@ -89,10 +89,41 @@
 ### Phase 14: Architecture Refactor
 - [x] Step 1: extract HUD into a renderer driven by an immutable state snapshot
   (game god class 2952 -> 2902 lines; pause hitbox no longer stashed in fields)
-- [ ] Step 2: extract world/background rendering
-- [ ] Step 3: extract menu + sub-screen rendering
-- [ ] Step 4: extract run lifecycle / settlement
-- [ ] Automated UI testing
+- [x] Step 2: extract world/background rendering (`4d7cb21`)
+  (`WorldRenderer` + `WorldViewState`; 2453 -> 2429 lines of draw code moved out.
+  Camera shake is the only state the renderer touches, and it restores the camera
+  before returning so the HUD does not inherit the offset. `waterColorAt` and
+  `raysVisible` came out as pure functions and are now tested directly.)
+- [x] Step 3: extract menu + sub-screen rendering (`af30875`)
+  (2679 -> 2453 lines. `MenuGeometry` is the point of the step: the profile claim
+  bug was the drawn box and the hit-tested box disagreeing, so both now come from
+  one function. `MenuText` is a three-method seam over the fonts because
+  `BitmapFont` cannot be built in a JVM test, which is what makes the geometry
+  testable without a device.)
+- [x] Step 4: extract run lifecycle / settlement (`154bf90`)
+  (`RunLifecycle` owns the ledger and the transitions. Ordering rules that were
+  implied by statement order are now spelled out and asserted: a run is
+  checkpointed before it is settled, and `begin`/`hold` are separate because the
+  world reset detaches whatever is held. A run that cannot be persisted stays
+  held rather than looking finished.)
+- [x] Automated UI testing (`294e050`)
+  (`MenuUiTest`: every control on the main menu, settings, shop and profile is
+  checked for reachability, occlusion and on-screen placement across twelve
+  viewports, in the same order the handlers test them. Deliberately not Espresso
+  or Robolectric -- the UI is GL-rendered, so there are no Views to address and
+  no GL context to render into; both were rejected for that reason, not for
+  availability.)
+- [x] God class 2952 -> 2429 lines across the four steps. What is left is
+  simulation, input and the game loop.
+
+**Verification note.** Each step was checked as a move rather than assumed to be
+one. Step 3 compared the old inline arithmetic against `MenuGeometry` over 14
+viewports (2352 identical values) and then compared old and new APKs' rendered
+ink masks on six screens (100% agreement). Step 2 compared the drawing arithmetic
+across four viewports, four cameras, nine depths and five clocks plus every
+entity and boss pattern (232402 identical values). A pixel diff of the world was
+not available: the emulator would not hold a landscape viewport and its surface
+froze mid-run.
 
 ### Phase 15: Monetization (Optional)
 - [ ] Optional cosmetic purchases
