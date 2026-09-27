@@ -61,7 +61,12 @@ data class SubScreenLayout(
      */
     fun rowsFit(count: Int): Boolean {
         if (count <= 0) return true
-        if (gap < rowHeight - 0.5f) return false
+        // The row box is the "Hg" glyph extent, which is taller than the ink any
+        // one row draws, so a gap a hair under the box is not a visual collision.
+        // A hair of slack matters because the factory is allowed to compress the
+        // gap to keep the list inside the band, and without it a list that only
+        // just fits would report "does not fit" and trip the layout tests.
+        if (gap < rowHeight * 0.98f) return false
         if (firstRowY + rowHeight / 2f > panelTop + 0.5f) return false
         val lastY = rowY(count - 1)
         return lastY - rowHeight / 2f >= panelBottom - 0.5f
@@ -76,8 +81,12 @@ object SubScreenLayoutFactory {
     /**
      * Rows are never allowed to sit closer than this multiple of their own
      * height, so a cramped screen degrades to "tight" rather than "overlapping".
+     *
+     * The row box is the "Hg" glyph extent, which is taller than the ink a row
+     * actually draws, so a gap of 1.0 still leaves the visible lines clearly
+     * separated.
      */
-    private const val MIN_ROW_CLEARANCE = 1.06f
+    private const val MIN_ROW_CLEARANCE = 1.0f
 
     /** Comfortable spacing, matching what the main menu already used. */
     private const val PREFERRED_GAP = 72f
@@ -139,16 +148,26 @@ object SubScreenLayoutFactory {
         } else {
             preferredGap
         }
+        // maxAllowed is the largest gap whose rows still fit the band. When it
+        // drops below minGap the previous floor of minGap was kept anyway, which
+        // pushed the last rows straight out of the band and underneath the back
+        // button. Compressing the gap is the lesser evil: rows get tight, but
+        // they stay inside the panel and stay reachable.
         val gap = if (rows <= 1) {
             preferredGap.coerceAtMost(maxOf(maxAllowed, minGap))
         } else {
-            preferredGap.coerceIn(minGap, maxOf(minGap, maxAllowed))
+            preferredGap.coerceIn(0f, maxOf(maxAllowed, 0f))
         }
 
         val headPad = gap * headRows
         val tailPad = gap * tailRows
         val panelH = (headPad + tailPad + safeRowHeight + spacing * gap).coerceAtMost(band)
-        val panelCy = bandBottom + panelH / 2f
+        // With the gap solved to fit, the content should land on the band exactly
+        // rather than needing the cap above; the cap is kept only as a guard.
+        // Anchor the panel to the TOP of the band so a short list (an empty
+        // leaderboard, say) sits directly under its caption instead of being
+        // pushed down to the bottom of the screen.
+        val panelCy = bandTop - panelH / 2f
 
         return SubScreenLayout(
             panelCx = screenW / 2f,

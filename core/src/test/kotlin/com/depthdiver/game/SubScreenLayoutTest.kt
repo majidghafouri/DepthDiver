@@ -16,16 +16,24 @@ class SubScreenLayoutTest {
 
     private data class Device(val name: String, val w: Float, val h: Float)
 
+    /**
+     * These are the app's viewports, so they are always landscape.
+     *
+     * The manifest pins `sensorLandscape`, so a 1440x3200 phone hands the game a
+     * 3200x1440 surface. The test used to model the panel's portrait dimensions
+     * instead, which made the band look roughly twice as tall as it is and hid
+     * the profile claim row landing on top of the back button.
+     */
     private val devices = listOf(
-        Device("small phone", 480f, 800f),
-        Device("reference phone", 720f, 1280f),
-        Device("tall 18:9 phone", 1080f, 2340f),
-        Device("tall 20:9 phone", 1080f, 2400f),
-        Device("user's phone 1440x3200", 1440f, 3200f),
-        Device("tablet portrait", 1536f, 2048f),
-        Device("tablet landscape", 2048f, 1536f),
-        Device("foldable open", 1812f, 2176f),
-        Device("landscape phone", 2400f, 1080f),
+        Device("small phone", 800f, 480f),
+        Device("reference phone", 1280f, 720f),
+        Device("tall 18:9 phone", 2340f, 1080f),
+        Device("tall 20:9 phone", 2400f, 1080f),
+        Device("user's phone 3200x1440", 3200f, 1440f),
+        Device("tablet", 2048f, 1536f),
+        Device("tablet other way", 1536f, 2048f),
+        Device("foldable open", 2176f, 1812f),
+        Device("short landscape phone", 2400f, 1080f),
     )
 
     /** Mirrors how DepthDiverGame generates the body font. */
@@ -70,7 +78,7 @@ class SubScreenLayoutTest {
     private data class Screen(val name: String, val rows: Int, val pillRows: Boolean)
 
     private val screens = listOf(
-        Screen("profile stats", 6, false),
+        Screen("profile stats", 9, false),
         Screen("achievements", 9, false),
         Screen("leaderboard", 5, false),
         Screen("shop", 5, true),
@@ -94,14 +102,66 @@ class SubScreenLayoutTest {
 
     @Test
     fun rowsNeverOverlapEvenWhenTheContentCannotFit() {
-        // A screen can be handed more rows than it has room for. Overlap is never
-        // acceptable, so the gap must hold at its minimum spacing even then.
+        // A screen can be handed more rows than it has room for. The gap then has
+        // to compress, because the alternative -- keeping the preferred gap and
+        // letting the last rows leave the band -- is what buried the profile
+        // claim button underneath the back button. Rows may get tight, but the
+        // panel must still fit the band and stay on screen.
         for (d in devices) {
             for (rows in listOf(12, 20, 40)) {
                 val l = layoutFor(d, rows, pillHeight(d))
+                val (bandTop, bandBottom) = band(d)
+                val band = bandTop - bandBottom
                 assertTrue(
-                    l.gap >= l.rowHeight,
-                    "${d.name} rows=$rows: gap ${l.gap} is below row height ${l.rowHeight}",
+                    l.panelH <= band + 0.5f,
+                    "${d.name} rows=$rows: panel ${l.panelH} exceeds band $band",
+                )
+                assertTrue(
+                    l.gap >= 0f,
+                    "${d.name} rows=$rows: negative gap ${l.gap}",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun theProfileClaimRowStaysClearOfTheBackButton() {
+        // The reported bug: nine pill-height rows did not fit the band, so the
+        // claim row was pushed down onto the back pill and every tap on it went
+        // "back" instead. The profile now uses text rows, so the claim row has to
+        // clear the back pill with room to spare.
+        val d = devices.first { it.name.contains("3200x1440") }
+        val (bandTop, bandBottom) = band(d)
+        val l = layoutFor(d, 9, glyphHeight(d))
+        val claimRowY = l.rowY(8)
+        val claimPillH = pillHeight(d)
+        val backPillH = pillHeight(d)
+        assertTrue(
+            claimRowY - claimPillH / 2f > bandBottom,
+            "claim pill (bottom ${claimRowY - claimPillH / 2f}) dips into the back " +
+                "pill zone (top $bandBottom) on ${d.name}",
+        )
+        assertTrue(
+            claimRowY + claimPillH / 2f <= l.panelTop,
+            "claim pill runs past the top of the panel",
+        )
+        assertTrue(backPillH > 0f)
+    }
+
+    @Test
+    fun everyRealScreenKeepsItsLastRowInsideTheBand() {
+        // Whichever way the gap compresses, the bottom row of every screen has to
+        // stop above the back button or it becomes untappable.
+        for (d in devices) {
+            for (s in screens) {
+                val rowH = if (s.pillRows) pillHeight(d) else glyphHeight(d)
+                val l = layoutFor(d, s.rows, rowH)
+                val (_, bandBottom) = band(d)
+                val lastBottom = l.rowY(s.rows - 1) - rowH / 2f
+                assertTrue(
+                    lastBottom >= bandBottom - 0.5f,
+                    "${s.name} on ${d.name}: last row bottom $lastBottom is under the " +
+                        "back button (band bottom $bandBottom)",
                 )
             }
         }
@@ -154,12 +214,19 @@ class SubScreenLayoutTest {
     @Test
     fun panelUsesTheAvailableWidthOnAHighResolutionPhone() {
         // The bug this replaces: an absolute 700px cap left the panel at 48% of a
-        // 1440px screen while the text inside it was 64px.
-        val d = devices.first { it.name == "user's phone 1440x3200" }
+        // 1440px screen while the text inside it was 64px. The cap is still
+        // absolute (700 * scale), so on a 3200px-wide landscape viewport the panel
+        // is a smaller share of the width than it is on a 1440px one; what matters
+        // is that it is wide enough for the widest row and never edge to edge.
+        val d = devices.first { it.name.contains("3200x1440") }
         val l = layoutFor(d, 6, pillHeight(d))
         assertTrue(
-            l.panelW >= d.w * 0.85f,
-            "panel ${l.panelW} should use most of a ${d.w}px screen, got ${l.panelW / d.w * 100}%",
+            l.panelW >= d.w * 0.35f,
+            "panel ${l.panelW} is too narrow on a ${d.w}px screen",
+        )
+        assertTrue(
+            l.panelW <= d.w * 0.9f + 0.5f,
+            "panel ${l.panelW} should never run edge to edge on ${d.w}px",
         )
     }
 

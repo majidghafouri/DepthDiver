@@ -127,12 +127,64 @@ object Widgets {
         font.color = Color.WHITE
     }
 
+    /**
+     * When set, panels and pills render with a more opaque background and a
+     * brighter border. Driven by the High Contrast setting so that toggle has a
+     * visible effect rather than only changing a word.
+     */
+    var highContrast: Boolean = false
+
     /** Dark translucent panel behind menu content to make labels pop. */
     fun panel(batch: SpriteBatch, pixel: Texture, cx: Float, cy: Float, w: Float, h: Float) {
-        batch.setColor(0f, 0.02f, 0.08f, 0.55f)
+        val a = if (highContrast) 0.86f else 0.55f
+        val edge = if (highContrast) 0.85f else 0.25f
+        batch.setColor(0f, 0.02f, 0.08f, a)
         batch.draw(pixel, cx - w / 2f, cy - h / 2f, w, h)
-        batch.setColor(0.25f, 0.45f, 0.72f, 0.25f)
+        batch.setColor(0.25f, 0.45f, 0.72f, edge)
         batch.draw(pixel, cx - w / 2f, cy + h / 2f - 3f, w, 3f)
         batch.setColor(Color.WHITE)
+    }
+
+    /**
+     * Volume-style slider: a track, a filled portion and a draggable knob.
+     *
+     * [fraction] is clamped to 0..1. Returns the track size so hitboxes and
+     * drawing cannot drift apart.
+     */
+    fun slider(
+        batch: SpriteBatch,
+        font: BitmapFont,
+        pixel: Texture,
+        cx: Float,
+        cy: Float,
+        w: Float,
+        fraction: Float,
+        scale: Float = 1f,
+    ): Pair<Float, Float> {
+        val f = fraction.coerceIn(0f, 1f)
+        val h = GlyphLayout(font, "W").height * 0.6f
+        val left = cx - w / 2f
+        val border = if (highContrast) 1f else 2f
+
+        batch.setColor(0f, 0f, 0f, 0.35f)
+        batch.draw(pixel, left - 2f, cy - h / 2f - 2f, w + 4f, h + 4f)
+        batch.setColor(
+            if (highContrast) 0.05f else 0.16f,
+            if (highContrast) 0.10f else 0.26f,
+            if (highContrast) 0.20f else 0.44f,
+            0.95f,
+        )
+        batch.draw(pixel, left, cy - h / 2f, w, h)
+        batch.setColor(0.30f, 0.72f, 1f, 1f)
+        batch.draw(pixel, left + border, cy - h / 2f + border, (w - border * 2) * f, h - border * 2)
+
+        val knobW = maxOf(4f * scale, h * 0.5f)
+        val knobX = left + (w - knobW) * f
+        batch.setColor(0.02f, 0.06f, 0.14f, 1f)
+        batch.draw(pixel, knobX, cy - h * 0.9f, knobW, h * 1.8f)
+        batch.setColor(0.95f, 0.99f, 1f, 1f)
+        batch.draw(pixel, knobX + 1f, cy - h * 0.75f, knobW - 2f, h * 1.5f)
+        batch.setColor(Color.WHITE)
+        return w to h
     }
 }
