@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">Depth Diver</string>
+
+    <string name="notification_channel_name">Depth Diver Challenges</string>
+    <string name="notification_channel_description">Daily and weekly challenge notifications</string>
+    <string name="notification_daily_title">Daily challenge</string>
+    <string name="notification_weekly_title">Weekly challenge</string>
+    <string name="notification_objective_depth">Reach %1$d m</string>
+    <string name="notification_objective_pearls">Collect %1$d pearls</string>
+    <string name="notification_objective_score">Score %1$d</string>
+    <string name="notification_reward">Reward: %1$d pearls</string>
+    <string name="notification_progress">Best so far — %1$d m · %2$d pearls · %3$d score</string>
 </resources>

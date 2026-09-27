@@ -12,19 +12,6 @@ class AndroidLauncher : AndroidApplication() {
 
     private var game: DepthDiverGame? = null
     private var backCallback: OnBackInvokedCallback? = null
-    private var notificationManager: ChallengeNotificationManager? = null
-
-    // Kept in SharedPreferences rather than a field: an Activity field is lost
-    // on process death, which would re-prompt the player on every cold start.
-    private val notificationPermissionAsked: Boolean
-        get() = getSharedPreferences(PREFS, MODE_PRIVATE)
-            .getBoolean(KEY_ASKED_NOTIFICATIONS, false)
-
-    private fun markNotificationPermissionAsked() {
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putBoolean(KEY_ASKED_NOTIFICATIONS, true)
-            .apply()
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,13 +52,15 @@ class AndroidLauncher : AndroidApplication() {
      */
     private fun scheduleChallengeNotifications() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission()) {
-            if (notificationPermissionAsked) {
-                // Already asked once and still denied: respect that and stop
-                // prompting instead of nagging on every launch.
-                return
-            }
-            markNotificationPermissionAsked()
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+            // Already asked once and still denied: respect that and stop
+            // prompting instead of nagging on every launch. The flag lives in
+            // SharedPreferences because an Activity field dies with the process.
+            if (ChallengeProgress.wasPermissionAsked(this)) return
+            ChallengeProgress.markPermissionAsked(this)
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                REQUEST_NOTIFICATIONS,
+            )
             return
         }
         startNotificationReminders()
@@ -80,9 +69,11 @@ class AndroidLauncher : AndroidApplication() {
     private fun startNotificationReminders() {
         if (!hasNotificationPermission()) return
         runCatching {
-            notificationManager = ChallengeNotificationManager(this)
-            notificationManager?.scheduleDailyChallenge()
-            notificationManager?.scheduleWeeklyChallenge()
+            ChallengeAlarms.ensureChannel(this)
+            // Mirror the record stats so the receiver can read them from a
+            // cold process; safe now because Gdx.app exists.
+            ChallengeProgress.syncFromProfile(this)
+            ChallengeAlarms.armAll(this)
         }
     }
 
@@ -127,7 +118,5 @@ class AndroidLauncher : AndroidApplication() {
 
     private companion object {
         const val REQUEST_NOTIFICATIONS = 4201
-        const val PREFS = "depthdiver-notifications"
-        const val KEY_ASKED_NOTIFICATIONS = "askedPostNotifications"
     }
 }
