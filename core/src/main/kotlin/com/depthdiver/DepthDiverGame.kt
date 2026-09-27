@@ -792,15 +792,14 @@ class DepthDiverGame : ApplicationAdapter() {
     fun shareCurrentRunCode(): String? = currentRunCode
 
     fun setRunCodeFromFriend(code: String): Boolean {
-        return RunSeed.decode(code)?.let { (seed, diff) ->
-            fairness.reset(seed)
-            if (diff != Profile.difficulty()) {
-                Profile.setDifficulty(diff)
-            }
-            resetWorld()
-            currentRunCode = RunSeed.encode(seed, diff)
-            true
-        } ?: false
+        val (seed, diff) = RunSeed.decode(code) ?: return false
+        if (diff != Profile.difficulty()) {
+            Profile.setDifficulty(diff)
+        }
+        // The seed has to be threaded into the world reset, otherwise the
+        // provider mints a fresh seed and the shared world is never built.
+        resetWorld(seed)
+        return true
     }
 
     private fun resumeGame() {
@@ -2855,10 +2854,14 @@ class DepthDiverGame : ApplicationAdapter() {
         playerSpeed = 16f * (1f + upgradeSpeedLevel * 0.08f)
     }
 
-    private fun resetWorld() {
+    private fun resetWorld(seed: Long? = null) {
         activeRun = null
         val difficulty = Profile.difficulty()
-        val code = runSeedProvider.onRunStart(fairness, difficulty)
+        val code = if (seed == null) {
+            runSeedProvider.onRunStart(fairness, difficulty)
+        } else {
+            runSeedProvider.onRunStartWithSeed(fairness, seed, difficulty)
+        }
         currentRunCode = code
         gameplayClock.reset()
         frameDelta = 0f

@@ -18,17 +18,6 @@ object RunSeed {
     private const val SEPARATOR = "-"
 
     /**
-     * Create a shareable run seed from a ProceduralFairness instance and difficulty.
-     */
-    fun create(fairness: ProceduralFairness, difficulty: Int): String {
-        // The ProceduralFairness doesn't expose its seed directly, so we need
-        // to track it at run creation time. This is a simplified version.
-        val seed = System.currentTimeMillis() xor (Thread.currentThread().id shl 32)
-        fairness.reset(seed) // This re-seeds; in practice capture at run start
-        return encode(seed, difficulty)
-    }
-
-    /**
      * Encode a raw seed and difficulty into a shareable string.
      */
     fun encode(seed: Long, difficulty: Int): String {
@@ -62,13 +51,17 @@ object RunSeed {
     fun isValid(code: String): Boolean = decode(code) != null
 
     /**
-     * Apply a decoded run seed to a ProceduralFairness and Profile difficulty.
+     * Apply a decoded run seed, but only if it encodes the expected difficulty.
+     *
+     * [fairness] is left untouched when the code is malformed or carries a
+     * different difficulty, so a rejected code cannot leave the generator
+     * half-re-seeded.
      */
     fun apply(fairness: ProceduralFairness, difficulty: Int, code: String): Boolean {
-        return decode(code)?.let { (seed, diff) ->
-            fairness.reset(seed)
-            diff == difficulty // caller can decide to override or enforce
-        } ?: false
+        val (seed, diff) = decode(code) ?: return false
+        if (diff != difficulty) return false
+        fairness.reset(seed)
+        return true
     }
 }
 
@@ -81,11 +74,21 @@ class RunSeedProvider {
     private var currentSeed: Long = 0
     private var currentDifficulty = 1 // NORMAL
 
-    fun onRunStart(fairness: ProceduralFairness, difficulty: Int): String {
-        currentSeed = System.currentTimeMillis() xor (Thread.currentThread().id shl 32)
-        fairness.reset(currentSeed)
+    fun onRunStart(fairness: ProceduralFairness, difficulty: Int): String =
+        onRunStartWithSeed(fairness, generateSeed(), difficulty)
+
+    /**
+     * Start a run from an explicit seed rather than a fresh one.
+     *
+     * This is the path a shared/friend code has to take: [onRunStart] always
+     * mints a new seed, so routing a shared code through it would overwrite
+     * the seed and the two players would get different worlds.
+     */
+    fun onRunStartWithSeed(fairness: ProceduralFairness, seed: Long, difficulty: Int): String {
+        fairness.reset(seed)
+        currentSeed = seed
         currentDifficulty = difficulty
-        return RunSeed.encode(currentSeed, currentDifficulty)
+        return RunSeed.encode(seed, difficulty)
     }
 
     fun getCurrentCode(): String = RunSeed.encode(currentSeed, currentDifficulty)
@@ -93,4 +96,7 @@ class RunSeedProvider {
     fun getCurrentSeed(): Long = currentSeed
 
     fun getCurrentDifficulty(): Int = currentDifficulty
+
+    private fun generateSeed(): Long =
+        System.currentTimeMillis() xor (Thread.currentThread().id shl 32)
 }
