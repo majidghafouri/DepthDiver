@@ -45,6 +45,8 @@ import com.depthdiver.game.FixedStepClock
 import com.depthdiver.game.GameAction
 import com.depthdiver.game.GameFlow
 import com.depthdiver.game.GameState
+import com.depthdiver.game.SubScreenLayout
+import com.depthdiver.game.SubScreenLayoutFactory
 import com.depthdiver.game.INITIAL_PLAYER_X_METERS
 import com.depthdiver.game.INITIAL_PLAYER_Y_METERS
 import com.depthdiver.game.MoveDirection
@@ -1633,18 +1635,14 @@ class DepthDiverGame : ApplicationAdapter() {
             goToMenu()
             return
         }
-        val panel = settingsPanel()
-        val lineGap = min(50f, panel.h / 8f)
-        val startY = panel.cy + panel.h / 2f - 30f
-
-        val musicRow = audioToggleRow(panel, startY)
-        if (Widgets.contains(tx, ty, musicRow.cx, musicRow.cy, musicRow.w, musicRow.h)) {
+        val musicRow = audioToggleRow(0)
+        if (Widgets.containsTouch(tx, ty, musicRow.cx, musicRow.cy, musicRow.w, musicRow.h, uiScale.minTouchPx)) {
             audio.toggleMusicMute()
             audio.playClick()
             return
         }
-        val sfxRow = audioToggleRow(panel, startY - lineGap)
-        if (Widgets.contains(tx, ty, sfxRow.cx, sfxRow.cy, sfxRow.w, sfxRow.h)) {
+        val sfxRow = audioToggleRow(1)
+        if (Widgets.containsTouch(tx, ty, sfxRow.cx, sfxRow.cy, sfxRow.w, sfxRow.h, uiScale.minTouchPx)) {
             audio.toggleSfxMute()
             audio.playClick()
         }
@@ -1684,7 +1682,12 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun backPill(): ShopRect =
-        ShopRect(screenWidth / 2f, screenHeight * 0.08f, Widgets.pillW(font, Strings.t("back")), Widgets.pillH(font, Strings.t("back")))
+        ShopRect(
+            screenWidth / 2f,
+            screenHeight * 0.08f,
+            Widgets.pillW(font, Strings.t("back"), uiScale.factor),
+            Widgets.pillH(font, Strings.t("back"), uiScale.factor),
+        )
 
     private fun shopBuyLabel(u: Profile.Upgrade): String {
         val cost = Profile.upgradeCost(u)
@@ -1695,33 +1698,62 @@ class DepthDiverGame : ApplicationAdapter() {
 
     /** Shared panel width for the sub-screens (profile/achievements/leaderboard/shop):
      *  wide enough that long stat/achievement names never collide with their values. */
-    private fun subPanelW(): Float = min(screenWidth * 0.86f, screenHeight * 1.6f).coerceAtMost(700f)
+    /** Measured body-text line height, so rows can be spaced by their real size. */
+    private fun subTextRowHeight(): Float = GlyphLayout(font, "Hg").height
 
-    private fun shopPanel(): ShopRect {
-        val panelW = subPanelW()
-        val panelH = screenHeight * 0.6f
-        return ShopRect(screenWidth / 2f, screenHeight / 2f, panelW, panelH)
+    /** Row height for rows that contain a pill, since the pill is the tallest thing in them. */
+    private fun subPillRowHeight(): Float = Widgets.pillH(font, "W", uiScale.factor)
+
+    private fun subScreenTitleCy(): Float = screenHeight * 0.84f
+
+    /**
+     * Vertical space a sub-screen panel may occupy: below the title, above the
+     * back pill. Previously the panel height was a fixed fraction of the screen
+     * and the settings panel grew straight through the title.
+     */
+    private fun subScreenBand(): Pair<Float, Float> {
+        val titleH = GlyphLayout(titleFont, "Hg").height
+        val titleBottom = subScreenTitleCy() - titleH / 2f - uiScale.gap(12f)
+        val back = backPill()
+        val backTop = back.cy + back.h / 2f + uiScale.gap(12f)
+        return titleBottom to backTop
     }
 
-    private fun shopHeaderCy(panel: ShopRect): Float =
-        panel.cy + panel.h / 2f - 34f
-
-    private fun shopRowCy(index: Int, panel: ShopRect): Float {
-        val lineGap = min(60f, (panel.h - 84f) / Profile.Upgrade.values().size)
-        return panel.cy + panel.h / 2f - 84f - lineGap * index
+    /**
+     * Row layout for a sub-screen. Every panel goes through this so rows are
+     * spaced by the height of the text they actually draw, instead of by fixed
+     * pixel constants that went stale once the font started scaling.
+     */
+    private fun subLayout(rows: Int, pillRows: Boolean): SubScreenLayout {
+        val (bandTop, bandBottom) = subScreenBand()
+        return SubScreenLayoutFactory.create(
+            screenW = screenWidth,
+            screenH = screenHeight,
+            bandTop = bandTop,
+            bandBottom = bandBottom,
+            rowHeight = if (pillRows) subPillRowHeight() else subTextRowHeight(),
+            rows = rows,
+            scale = uiScale.factor,
+            padX = uiScale.gap(18f),
+        )
     }
 
-    /** Fixed left edge for every BUY pill so the buttons form one clean column. */
-    private fun shopPillLeft(panel: ShopRect): Float = panel.cx + panel.w / 2f - 150f
+    /** Right-hand x for the value pills on a sub-screen row. */
+    private fun subPillCx(layout: SubScreenLayout): Float =
+        layout.panelCx + layout.panelW / 2f - uiScale.gap(30f)
 
-    private fun shopBuyPill(u: Profile.Upgrade, panel: ShopRect, index: Int): ShopRect {
+    /** One header row of pearls, then one row per upgrade. */
+    private fun shopLayout(): SubScreenLayout =
+        subLayout(rows = Profile.Upgrade.values().size + 1, pillRows = true)
+
+    /** BUY pill for upgrade row [row], right-aligned so the buttons form one column. */
+    private fun shopBuyPill(u: Profile.Upgrade, layout: SubScreenLayout, row: Int): ShopRect {
         val label = shopBuyLabel(u)
-        val leftX = shopPillLeft(panel)
         return ShopRect(
-            leftX + Widgets.pillW(font, label) / 2f,
-            shopRowCy(index, panel) - 13f,
-            Widgets.pillW(font, label),
-            Widgets.pillH(font, label)
+            layout.valueX() - Widgets.pillW(font, label, uiScale.factor) / 2f,
+            layout.rowY(row),
+            Widgets.pillW(font, label, uiScale.factor),
+            Widgets.pillH(font, label, uiScale.factor),
         )
     }
 
@@ -1731,12 +1763,13 @@ class DepthDiverGame : ApplicationAdapter() {
             goToMenu()
             return
         }
-        val panel = shopPanel()
+        val layout = shopLayout()
         Profile.Upgrade.values().forEachIndexed { i, u ->
             if (Profile.isMaxed(u)) return@forEachIndexed
-            val pill = shopBuyPill(u, panel, i)
-            if (Widgets.contains(tx, ty, pill.cx, pill.cy, pill.w, pill.h)) {
+            val pill = shopBuyPill(u, layout, i + 1)
+            if (Widgets.containsTouch(tx, ty, pill.cx, pill.cy, pill.w, pill.h, uiScale.minTouchPx)) {
                 buyUpgrade(u)
+                audio.playClick()
                 return
             }
         }
@@ -2243,21 +2276,27 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     private fun drawSubScreenHeader(title: String) {
-        Widgets.text(batch, titleFont, title, screenWidth / 2f, screenHeight * 0.84f)
+        Widgets.text(batch, titleFont, title, screenWidth / 2f, subScreenTitleCy())
         val pill = backPill()
-        Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, Strings.t("back"))
+        Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, Strings.t("back"), scale = uiScale.factor)
     }
 
+    /**
+     * Rows: 6 stats, then the daily line, the challenge summary and the claim
+     * button. Padded as pill rows because the claim button is the tallest thing
+     * in the panel, which keeps the whole stack on one spacing.
+     */
+    private fun profileLayout(): SubScreenLayout = subLayout(rows = 9, pillRows = true)
+
     private fun drawProfileScreen() {
-        Widgets.text(batch, titleFont, Strings.t("profile"), screenWidth / 2f, screenHeight * 0.84f)
-        Widgets.pill(batch, font, uiPixel, screenWidth * 0.2f, screenHeight * 0.08f, Strings.t("back"))
+        Widgets.text(batch, titleFont, Strings.t("profile"), screenWidth / 2f, subScreenTitleCy())
+        val back = backPill()
+        Widgets.pill(batch, font, uiPixel, back.cx, back.cy, Strings.t("back"), scale = uiScale.factor)
         val achLabel = "${Strings.t("achievements")} ${Achievements.count()}/${Achievements.ALL.size}"
-        Widgets.pill(batch, font, uiPixel, screenWidth * 0.8f, screenHeight * 0.08f, achLabel)
-        val panelCx = screenWidth / 2f
-        val panelCy = screenHeight / 2f
-        val panelW = subPanelW()
-        val panelH = screenHeight * 0.58f
-        Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
+        Widgets.pill(batch, font, uiPixel, screenWidth * 0.82f, back.cy, achLabel, scale = uiScale.factor)
+
+        val layout = profileLayout()
+        Widgets.panel(batch, uiPixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
 
         val stats = listOf(
             "${Strings.t("best")} ${Strings.t("depth")}" to "${bestDepth.toInt()} m",
@@ -2267,17 +2306,14 @@ class DepthDiverGame : ApplicationAdapter() {
             Strings.t("dives") to "${Profile.dives()}",
             Strings.t("achievements") to "${Achievements.count()}/${Achievements.ALL.size}"
         )
-        val labelX = panelCx - panelW / 2f + 34f
-        val valueX = panelCx + panelW / 2f - 34f
-        val lineGap = min(46f, panelH / (stats.size + 1))
         stats.forEachIndexed { i, (label, value) ->
-            val cy = panelCy + panelH / 2f - lineGap * (i + 1)
             font.color = Color.WHITE
-            Widgets.textLeft(batch, font, label, labelX, cy)
+            Widgets.textLeft(batch, font, label, layout.labelX(), layout.rowBaseline(i))
             font.color = Color.GOLD
-            Widgets.textRight(batch, font, value, valueX, cy)
+            Widgets.textRight(batch, font, value, layout.valueX(), layout.rowBaseline(i))
         }
         font.color = Color.WHITE
+
         val day = Profile.dailyDay()
         val activeCh = Challenge.activeFor(day)
         val chClaimed = Challenge.claimedFor(activeCh)
@@ -2288,87 +2324,81 @@ class DepthDiverGame : ApplicationAdapter() {
             batch,
             font,
             if (Profile.claimedDailyDay() == day) Strings.t("dailyClaimed") else Strings.t("dailyReady"),
-            panelCx,
-            panelCy - 70f
+            layout.panelCx,
+            layout.rowY(stats.size),
         )
-        val chText = if (chClaimed) {
-            Strings.t("chDone")
-        } else {
-            activeCh.summary(bestDepth, Profile.bestRunPearls(), bestScore)
-        }
+        val chText = if (chClaimed) Strings.t("chDone") else activeCh.summary(bestDepth, Profile.bestRunPearls(), bestScore)
         font.color = Color.CYAN
-        Widgets.text(batch, font, chText, panelCx, panelCy - 116f)
+        Widgets.text(batch, font, chText, layout.panelCx, layout.rowY(stats.size + 1))
 
         if (!chClaimed) {
             val claimLabel = "${Strings.t("claim")} +${Challenge.REWARD}"
-            Widgets.pill(batch, font, uiPixel, panelCx, profileClaimCy(), claimLabel, enabled = chMet)
+            Widgets.pill(
+                batch, font, uiPixel, layout.panelCx, profileClaimCy(),
+                claimLabel, enabled = chMet, scale = uiScale.factor,
+            )
         }
         font.color = Color.WHITE
     }
 
     /** Claim button for the daily challenge on the profile screen. */
-    private fun profileClaimCy(): Float = screenHeight / 2f - 168f
+    private fun profileClaimCy(): Float = profileLayout().rowY(8)
+
+    private fun achievementsLayout(): SubScreenLayout =
+        subLayout(rows = Achievements.ALL.size, pillRows = false)
 
     private fun drawAchievementsScreen() {
         drawSubScreenHeader(Strings.t("achievements"))
-        val panelCx = screenWidth / 2f
-        val panelCy = screenHeight / 2f
-        val panelW = subPanelW()
-        val panelH = screenHeight * 0.52f
-        Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
+        val layout = achievementsLayout()
+        Widgets.panel(batch, uiPixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
 
         if (Achievements.count() == Achievements.ALL.size) {
             font.color = Color.GOLD
-            Widgets.text(batch, font, Strings.t("allDone"), panelCx, panelCy + panelH / 2f - 22f)
+            Widgets.text(batch, font, Strings.t("allDone"), layout.panelCx, layout.panelTop - layout.rowHeight * 0.4f)
         }
 
-        val labelX = panelCx - panelW / 2f + 34f
-        val statusX = panelCx + panelW / 2f - 34f
-        val lineGap = min(46f, panelH / (Achievements.ALL.size + 1))
         Achievements.ALL.forEachIndexed { i, def ->
-            val cy = panelCy + panelH / 2f - lineGap * (i + 1)
             if (Achievements.isUnlocked(def)) {
                 font.color = Color.GOLD
-                Widgets.textLeft(batch, font, def.name, labelX, cy)
+                Widgets.textLeft(batch, font, def.name, layout.labelX(), layout.rowBaseline(i))
                 font.color = Color.WHITE
-                Widgets.textRight(batch, font, Strings.t("open"), statusX, cy)
+                Widgets.textRight(batch, font, Strings.t("open"), layout.valueX(), layout.rowBaseline(i))
             } else {
                 font.color = Color(0.45f, 0.55f, 0.65f, 1f)
-                Widgets.textLeft(batch, font, def.name, labelX, cy)
-                Widgets.textRight(batch, font, Strings.t("locked"), statusX, cy)
+                Widgets.textLeft(batch, font, def.name, layout.labelX(), layout.rowBaseline(i))
+                Widgets.textRight(batch, font, Strings.t("locked"), layout.valueX(), layout.rowBaseline(i))
             }
         }
         font.color = Color.WHITE
     }
 
+    private fun leaderboardLayout(entries: Int): SubScreenLayout =
+        subLayout(rows = (entries + 1).coerceAtLeast(2), pillRows = false)
+
     private fun drawLeaderboardScreen() {
         drawSubScreenHeader(Strings.t("leaderboard"))
-        val panelCx = screenWidth / 2f
-        val panelCy = screenHeight / 2f
-        val panelW = subPanelW()
-        val panelH = screenHeight * 0.56f
-        Widgets.panel(batch, uiPixel, panelCx, panelCy, panelW, panelH)
-
         val entries = Leaderboard.top()
+        val layout = leaderboardLayout(entries.size)
+        Widgets.panel(batch, uiPixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
 
+        val scoreX = layout.panelCx + layout.panelW / 4f
+        val depthX = layout.valueX()
+        val headerY = layout.rowBaseline(0)
         font.color = Color.CYAN
-        Widgets.textLeft(batch, font, Strings.t("rank"), panelCx - panelW / 2f + 40f, panelCy + panelH / 2f - 26f)
-        val scoreX = panelCx + panelW / 4f
-        val depthX = panelCx + panelW / 2f - 40f
-        Widgets.textRight(batch, font, Strings.t("score"), scoreX, panelCy + panelH / 2f - 26f)
-        Widgets.textRight(batch, font, Strings.t("depth"), depthX, panelCy + panelH / 2f - 26f)
+        Widgets.textLeft(batch, font, Strings.t("rank"), layout.labelX(), headerY)
+        Widgets.textRight(batch, font, Strings.t("score"), scoreX, headerY)
+        Widgets.textRight(batch, font, Strings.t("depth"), depthX, headerY)
 
         if (entries.isEmpty()) {
             font.color = Color.WHITE
-            Widgets.text(batch, font, Strings.t("noRuns"), panelCx, panelCy - 10f)
+            Widgets.text(batch, font, Strings.t("noRuns"), layout.panelCx, layout.rowY(1))
         } else {
-            val lineGap = min(38f, panelH / (entries.size + 1))
             entries.forEachIndexed { i, e ->
-                val cy = panelCy + panelH / 2f - 56f - lineGap * i
+                val y = layout.rowBaseline(i + 1)
                 font.color = Color.WHITE
-                Widgets.textLeft(batch, font, "${i + 1}.", panelCx - panelW / 2f + 40f, cy)
-                Widgets.textRight(batch, font, "${e.score}", scoreX, cy)
-                Widgets.textRight(batch, font, "${e.depth.toInt()} m", depthX, cy)
+                Widgets.textLeft(batch, font, "${i + 1}.", layout.labelX(), y)
+                Widgets.textRight(batch, font, "${e.score}", scoreX, y)
+                Widgets.textRight(batch, font, "${e.depth.toInt()} m", depthX, y)
             }
         }
         font.color = Color.WHITE
@@ -2376,104 +2406,64 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun drawShopScreen() {
         drawSubScreenHeader(Strings.t("shop"))
-        val panel = shopPanel()
-        Widgets.panel(batch, uiPixel, panel.cx, panel.cy, panel.w, panel.h)
+        val upgrades = Profile.Upgrade.values()
+        val layout = shopLayout()
+        Widgets.panel(batch, uiPixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
 
         font.color = Color.GOLD
-        Widgets.text(batch, font, "${Strings.t("pearls")}: ${Profile.pearls()}", panel.cx, shopHeaderCy(panel))
+        Widgets.text(batch, font, "${Strings.t("pearls")}: ${Profile.pearls()}", layout.panelCx, layout.rowY(0))
 
-        Profile.Upgrade.values().forEachIndexed { i, u ->
-            val cy = shopRowCy(i, panel)
-            val pill = shopBuyPill(u, panel, i)
-            val lvl = Profile.level(u)
+        upgrades.forEachIndexed { i, u ->
+            val cy = layout.rowY(i + 1)
             val label = shopBuyLabel(u)
             val affordable = !Profile.isMaxed(u) && Profile.pearls() >= (Profile.upgradeCost(u) ?: 0)
+            val pill = shopBuyPill(u, layout, i + 1)
 
             font.color = Color.WHITE
-            Widgets.textLeft(batch, font, u.label, panel.cx - panel.w / 2f + 34f, cy)
+            Widgets.textLeft(batch, font, u.label, layout.labelX(), layout.rowBaseline(i + 1))
             font.color = Color.CYAN
-            Widgets.textRight(batch, font, "${Strings.t("level")} $lvl/${Profile.MAX_LEVEL}", shopPillLeft(panel) - 24f, cy)
-            Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, label, enabled = affordable)
+            Widgets.textRight(
+                batch, font, "${Strings.t("level")} ${Profile.level(u)}/${Profile.MAX_LEVEL}",
+                pill.cx - pill.w / 2f - uiScale.gap(12f), layout.rowBaseline(i + 1),
+            )
+            Widgets.pill(batch, font, uiPixel, pill.cx, pill.cy, label, enabled = affordable, scale = uiScale.factor)
         }
         font.color = Color.WHITE
     }
 
+    /** One row per setting. Music and effects are toggles; the rest are read-only. */
+    private fun settingsLayout(): SubScreenLayout = subLayout(rows = 6, pillRows = true)
+
     private fun drawSettingsScreen() {
         drawSubScreenHeader(Strings.t("settings"))
-        val panel = settingsPanel()
-        Widgets.panel(batch, uiPixel, panel.cx, panel.cy, panel.w, panel.h)
+        val layout = settingsLayout()
+        Widgets.panel(batch, uiPixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
 
-        // Volume controls
-        val lineGap = min(50f, panel.h / 8f)
-        val startY = panel.cy + panel.h / 2f - 30f
+        fun row(i: Int, label: String, value: String) {
+            font.color = Color.WHITE
+            Widgets.textLeft(batch, font, label, layout.labelX(), layout.rowBaseline(i))
+            Widgets.pill(batch, font, uiPixel, subPillCx(layout), layout.rowY(i), value, scale = uiScale.factor)
+        }
 
-        // Music: a working mute toggle, with the level shown alongside it.
-        val musicY = startY
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("musicVolume"), panel.cx - panel.w / 2f + 30f, musicY)
-        Widgets.pill(batch, font, uiPixel, audioToggleX(panel), musicY,
-            if (audio.musicMuted) Strings.t("muted") else "${(Profile.musicVolume() * 100).toInt()}%",
-            enabled = true)
-
-        // Sound effects: independent from music.
-        val sfxY = musicY - lineGap
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("sfxVolume"), panel.cx - panel.w / 2f + 30f, sfxY)
-        Widgets.pill(batch, font, uiPixel, audioToggleX(panel), sfxY,
-            if (audio.sfxMuted) Strings.t("muted") else "${(Profile.sfxVolume() * 100).toInt()}%",
-            enabled = true)
-
-        // Master level, shown for reference.
-        val masterY = sfxY - lineGap
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("masterVolume"), panel.cx - panel.w / 2f + 30f, masterY)
-        Widgets.pill(batch, font, uiPixel, audioToggleX(panel), masterY,
-            "${(Profile.masterVolume() * 100).toInt()}%", enabled = true)
-
-        // Reduce motion
-        val reduceMotionY = masterY - lineGap
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("reduceMotion"), panel.cx - panel.w / 2f + 30f, reduceMotionY)
-        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, reduceMotionY,
-            if (Profile.reduceMotion()) Strings.t("on") else Strings.t("off"), 
-            enabled = true)
-
-        // High contrast
-        val contrastY = reduceMotionY - lineGap
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("highContrast"), panel.cx - panel.w / 2f + 30f, contrastY)
-        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, contrastY,
-            if (Profile.highContrast()) Strings.t("on") else Strings.t("off"),
-            enabled = true)
-
-        // Screen shake
-        val shakeY = contrastY - lineGap
-        font.color = Color.WHITE
-        Widgets.textLeft(batch, font, Strings.t("screenShake"), panel.cx - panel.w / 2f + 30f, shakeY)
-        Widgets.pill(batch, font, uiPixel, panel.cx + panel.w / 2f - 60f, shakeY,
-            if (Profile.screenShakeEnabled()) Strings.t("on") else Strings.t("off"),
-            enabled = true)
-
+        // Music and sound effects are independent mute toggles.
+        row(0, Strings.t("musicVolume"), if (audio.musicMuted) Strings.t("muted") else "${(Profile.musicVolume() * 100).toInt()}%")
+        row(1, Strings.t("sfxVolume"), if (audio.sfxMuted) Strings.t("muted") else "${(Profile.sfxVolume() * 100).toInt()}%")
+        row(2, Strings.t("masterVolume"), "${(Profile.masterVolume() * 100).toInt()}%")
+        row(3, Strings.t("reduceMotion"), if (Profile.reduceMotion()) Strings.t("on") else Strings.t("off"))
+        row(4, Strings.t("highContrast"), if (Profile.highContrast()) Strings.t("on") else Strings.t("off"))
+        row(5, Strings.t("screenShake"), if (Profile.screenShakeEnabled()) Strings.t("on") else Strings.t("off"))
         font.color = Color.WHITE
     }
-
-    /** Centre-x of the audio toggle pills, kept off the right panel edge. */
-    private fun audioToggleX(panel: ShopRect): Float = panel.cx + panel.w / 2f - 60f
 
     /**
-     * Hit boxes for the two audio toggles. These used to be decorative pills:
-     * the settings screen advertised volume controls that could not be touched.
+     * Hit box for one settings row's value pill. These used to be decorative:
+     * the screen advertised volume controls that could not be touched.
      */
-    private fun audioToggleRow(panel: ShopRect, y: Float): ShopRect {
+    private fun audioToggleRow(index: Int): ShopRect {
+        val layout = settingsLayout()
         val w = Widgets.pillW(font, Strings.t("muted"), uiScale.factor)
         val h = Widgets.pillH(font, "W", uiScale.factor)
-        return ShopRect(audioToggleX(panel), y, w, h)
-    }
-
-    private fun settingsPanel(): ShopRect {
-        val panelW = subPanelW()
-        val panelH = screenHeight * 0.7f
-        return ShopRect(screenWidth / 2f, screenHeight / 2f, panelW, panelH)
+        return ShopRect(subPillCx(layout), layout.rowY(index), w, h)
     }
 
     private fun drawHud() {
