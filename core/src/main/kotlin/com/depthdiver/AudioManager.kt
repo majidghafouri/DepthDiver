@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Preferences
 import com.badlogic.gdx.audio.Sound
 import com.depthdiver.audio.MusicDirector
+import com.depthdiver.audio.MusicScore
 import com.depthdiver.audio.MusicMix
 import com.depthdiver.audio.OnePole
 import com.depthdiver.audio.RateLimiter
@@ -342,70 +343,13 @@ class AudioManager {
     })
 
     /**
-     * The soundtrack's constant floor: a slow four-chord pad, roughly one chord
-     * every six seconds, with soft overlapping envelopes so the loop point is
-     * inaudible. Pure sine partials keep it soft -- no rumble, no percussion,
-     * nothing that builds as the run gets deeper.
+     * The constant layer: a light piano loop that never builds, whatever the run
+     * is doing. The notes live in [MusicScore]; this only renders them.
      */
-    private fun generateMusicBed(): Sound? = writeSound("music-bed", synth(MUSIC_LOOP_SECONDS) { t, _ ->
-        val chordIndex = (t / MUSIC_CHORD_SECONDS).toInt() % CHORDS.size
-        val local = t % MUSIC_CHORD_SECONDS
-        // Each voice swells in and releases so chords breathe into each other.
-        val voice = linearFade(local, MUSIC_CHORD_SECONDS, MUSIC_CHORD_SECONDS * 0.42f, MUSIC_CHORD_SECONDS * 0.42f)
-        val tide = 0.82f + 0.18f * sine(t, 0.045f)
+    private fun generateMusicBed(): Sound? =
+        writeSound("music-bed", synth(MusicScore.LOOP_SECONDS) { t, _ -> MusicScore.bed(t) })
 
-        // A soft low root under the chords. The pad alone measured with no
-        // energy below 80Hz and read as thin; this restores the weight that
-        // made the old drone feel soothing, without any of its noise.
-        val root = sine(t, ROOT) * 0.26f + sine(t, ROOT * 1.5f) * 0.08f
-
-        var wave = root
-        for ((index, freq) in CHORDS[chordIndex].withIndex()) {
-            // A touch of detune between the two low voices gives slow beating.
-            val detune = if (index == 0) 1.0035f else 1f
-            val amp = 0.28f / (1f + index * 0.45f)
-            wave += (sine(t, freq * detune) * 0.78f + sine(t, freq * 2f) * 0.22f) * amp
-        }
-        wave * voice * tide
-    })
-
-    /**
-     * A quiet sustained pad that opens up slowly with depth. Stays musical --
-     * long held fifths and an occasional soft bell -- so descending deep reads
-     * as wider and darker rather than louder and noisier.
-     */
-    private fun generateDeepPad(): Sound? = writeSound("music-deep", synth(MUSIC_LOOP_SECONDS) { t, _ ->
-        val tide = 0.7f + 0.3f * sine(t, 0.031f)
-        val held = sine(t, DEEP_ROOT) * 0.34f + sine(t, DEEP_ROOT * 1.5f) * 0.22f + sine(t, DEEP_ROOT * 2f) * 0.12f
-
-        // Sparse bell tones, so the layer has something to listen to rather
-        // than just sitting there as a drone.
-        var bells = 0f
-        for (i in 0 until 4) {
-            val at = i * (MUSIC_LOOP_SECONDS / 4f) + 1.7f
-            val age = t - at
-            if (age in 0f..3.2f) {
-                val note = DEEP_ROOT * (if (i % 2 == 0) 4f else 3f)
-                bells += (sine(age, note) * 0.6f + sine(age, note * 2.01f) * 0.16f) *
-                    attackDecay(age, 3.2f, 0.02f, 1.1f) * 0.10f
-            }
-        }
-        (held * tide + bells) * 0.8f
-    })
-
-    private companion object {
-        /** 24s at 22050Hz mono 16-bit is ~1MB per loop, generated once at boot. */
-        const val MUSIC_LOOP_SECONDS = 24f
-        const val MUSIC_CHORD_SECONDS = 6f
-        const val DEEP_ROOT = 110f
-        const val ROOT = 55f
-
-        /** Am7 - Fmaj7 - Cmaj7 - Gsus2: all consonant, none of them tense. */
-        val CHORDS = arrayOf(
-            floatArrayOf(110f, 130.81f, 164.81f, 196f),
-            floatArrayOf(87.31f, 130.81f, 164.81f, 220f),
-            floatArrayOf(130.81f, 164.81f, 196f, 246.94f),
-            floatArrayOf(98f, 146.83f, 196f, 220f),
-        )
-    }
+    /** The layer that opens up with depth. Bright and sparse, never a drone. */
+    private fun generateDeepPad(): Sound? =
+        writeSound("music-deep", synth(MusicScore.LOOP_SECONDS) { t, _ -> MusicScore.deep(t) })
 }
