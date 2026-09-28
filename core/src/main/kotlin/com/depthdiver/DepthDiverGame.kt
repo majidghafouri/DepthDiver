@@ -31,6 +31,8 @@ import com.depthdiver.cosmetic.Cosmetic
 import com.depthdiver.cosmetic.Cosmetics
 import com.depthdiver.menu.CosmeticBrowserView
 import com.depthdiver.monet.PurchaseResult
+import com.depthdiver.analytics.AnalyticsReport
+import com.depthdiver.analytics.RunSample
 import com.depthdiver.mutation.HazardFamily
 import com.depthdiver.mutation.MutationDeck
 import com.depthdiver.mutation.MutationEffects
@@ -2564,9 +2566,27 @@ class DepthDiverGame : ApplicationAdapter() {
             dispatch(GameAction.Pause)
             return
         }
+        recordRunSample(reason, outcome.score)
         applyOutcome(outcome)
         check(dispatch(GameAction.EndRun))
         audio.playCrash()
+    }
+
+    /**
+     * Log how the run went, so the next design decision is made on where players
+     * actually stop rather than on a guess. Local only; see `AnalyticsReport`.
+     */
+    private fun recordRunSample(reason: RunTerminalReason, finalScore: Int) {
+        AnalyticsReport.record(
+            RunSample(
+                depthMeters = depth,
+                score = finalScore,
+                seconds = elapsed,
+                outcome = com.depthdiver.analytics.RunOutcome.of(reason),
+                difficulty = Profile.difficulty(),
+                mutations = mutations.active.map { it.id },
+            ),
+        )
     }
 
     private fun checkpointActiveRun() {
