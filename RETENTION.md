@@ -32,11 +32,15 @@ This is the highest-leverage change available and it is cheap here: pure logic,
 no new art, no new audio. It also gives the leaderboard meaning (people compare
 builds) and the season pass something to be strategic about.
 
-### 2. Sharpen the first 60 seconds — NOT STARTED
-The first run decides whether there is a second. Currently it is "descend, avoid,
-collect". Needs a hook inside ten seconds: first pearl, a near-miss that fires the
-combo, the 50m milestone paying out visibly. Tutorial by doing, not by text — the
-reduce-motion and high-contrast settings already carry accessibility.
+### 2. Sharpen the first 60 seconds — BUILT (`289a55b`)
+The first pickup of a run is now always a pearl (~2s in, was a 35/65 coin flip).
+First milestone 50m -> 15m. First mutation pick 120m -> 15m, later picks every
+90m. Two hint lines on the first two dives, from the string table, fading over
+4.5s. All four are constants in `analytics/Opening.kt` so they can be argued
+about without reading the spawn code.
+
+Still missing from this item: a near-miss that fires the combo visibly, and any
+sense of the *shape* of a deep run before the player reaches it.
 
 ### 3. Landmarks — NOT STARTED
 Procedural means infinite but forgettable. Add 3-5 authored set pieces at fixed
@@ -58,14 +62,18 @@ already stored.
 Shareable seeds are already built and barely used. "Race my exact ocean" is the
 cheapest viral loop available and the plumbing is done.
 
-### 7. Measure before building more — BUILT (`600f04b`)
+### 7. Measure before building more — BUILT (`600f04b`, readout `6174d68`)
 `analytics/RunAnalytics.kt` (exact median + funnel, last 500 runs in memory) and
 `analytics/AnalyticsReport.kt` (running totals that survive, rendered as text).
 Local only, no identifier, no network.
 
 **The number to look at is `typicalStopMeters`** -- the median run's depth, not
-the best. If it is low, proposals 2 and 3 matter more than 4 and 5. Nothing has
-been read from it yet, so none of the remaining proposals are known to be right.
+the best. If it is low, proposals 2 and 3 matter more than 4 and 5.
+
+Reachable from the profile as a line, opt-in, with "these numbers never leave your
+device" on the screen because that is the kind of claim that has to be visible to
+be believed. Nothing has been read from it yet, so proposals 3 to 6 are still
+guesses.
 
 ## The open question: who is this for?
 
@@ -78,8 +86,12 @@ real fork and it is not a coding question:
   records. This is what has been built, and the piano soundtrack leans into it.
 
 Recommendation is the second, marketed as *the peaceful score-chaser* against
-hyper-casual noise. **Unanswered — owner's call.** Several proposals above assume
-the second answer and would be wrong under the first.
+hyper-casual noise.
+
+**Proceeding on the second answer** (calm score-chaser), since the remaining work
+was commissioned without picking one. Items 3 to 6 are all consistent with it. If
+broad-casual is the real target, the honest read is that this is a different
+product, not a different roadmap.
 
 ## Deliberately not doing
 
