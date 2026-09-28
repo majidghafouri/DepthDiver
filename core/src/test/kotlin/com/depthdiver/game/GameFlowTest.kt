@@ -20,6 +20,7 @@ class GameFlowTest {
         ),
         GameState.PROFILE to mapOf(
             GameAction.OpenAchievements to GameState.ACHIEVEMENTS,
+            GameAction.OpenReport to GameState.REPORT,
             GameAction.MainMenu to GameState.MAIN_MENU,
         ),
         GameState.LEADERBOARD to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
@@ -28,6 +29,7 @@ class GameFlowTest {
             GameAction.OpenShop to GameState.SHOP,
             GameAction.MainMenu to GameState.MAIN_MENU,
         ),
+        GameState.REPORT to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.MUTATION_SELECT to mapOf(
             GameAction.TakeMutation to GameState.PLAYING,
             GameAction.MainMenu to GameState.MAIN_MENU,
@@ -144,6 +146,7 @@ class GameFlowTest {
             GameState.SHOP,
             GameState.COSMETICS,
             GameState.MUTATION_SELECT,
+            GameState.REPORT,
             GameState.ACHIEVEMENTS,
             GameState.PLAYING,
             GameState.PAUSED,

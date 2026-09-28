@@ -7,6 +7,7 @@ enum class GameState {
     SHOP,
     COSMETICS,
     MUTATION_SELECT,
+    REPORT,
     ACHIEVEMENTS,
     SETTINGS,
     PLAYING,
@@ -31,6 +32,7 @@ fun backActionFor(state: GameState): BackAction = when (state) {
     GameState.SHOP,
     GameState.COSMETICS,
     GameState.MUTATION_SELECT,
+    GameState.REPORT,
     GameState.ACHIEVEMENTS,
     GameState.SETTINGS,
     -> BackAction.MAIN_MENU
@@ -51,6 +53,7 @@ sealed interface GameAction {
     data object OpenCosmetics : GameAction
     data object OpenMutationSelect : GameAction
     data object TakeMutation : GameAction
+    data object OpenReport : GameAction
     data object OpenAchievements : GameAction
     data object OpenSettings : GameAction
     data object MainMenu : GameAction
@@ -76,6 +79,7 @@ sealed interface GameAction {
             OpenShop,
             OpenMutationSelect,
             TakeMutation,
+            OpenReport,
         )
     }
 }
@@ -99,9 +103,11 @@ data class GameFlow(val state: GameState = GameState.MAIN_MENU) {
         }
         GameState.PROFILE -> when (action) {
             GameAction.OpenAchievements -> GameState.ACHIEVEMENTS
+            GameAction.OpenReport -> GameState.REPORT
             GameAction.MainMenu -> GameState.MAIN_MENU
             else -> null
         }
+        GameState.REPORT -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
         GameState.LEADERBOARD -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
         GameState.SHOP -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
         GameState.COSMETICS -> when (action) {

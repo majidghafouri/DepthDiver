@@ -53,6 +53,12 @@ object Strings {
         "cosmetics" to "COSMETICS", "equip" to "EQUIP", "equipped" to "EQUIPPED",
         "buy" to "BUY", "locked" to "LOCKED",
         "cosmeticsHint" to "Appearance only - never affects a run",
+        // Run report
+        "yourDives" to "YOUR DIVES", "yourDivesPrivacy" to "These numbers never leave your device",
+        "reportRuns" to "Dives", "reportTypicalStop" to "Typical stop", "reportAvgDepth" to "Average depth",
+        "reportAvgLength" to "Average length", "reportBestDepth" to "Best depth", "reportBestScore" to "Best score",
+        "reportOxygen" to "Ended: out of air", "reportHazard" to "Ended: hazard",
+        "reportNoRuns" to "No dives yet - go and leave one", "view" to "VIEW",
         // Mutations
         "mutation" to "MUTATION",
         "mutationChooseFirst" to "CHOOSE A MUTATION",

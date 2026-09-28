@@ -216,6 +216,14 @@ class MenuGeometry(
     fun mutationOptionBox(layout: SubScreenLayout, index: Int): MenuRect =
         MenuRect(layout.panelCx, layout.rowY(1 + index * 2), layout.panelW * 0.8f, layout.gap * 1.5f)
 
+    /** One row per figure, plus a row for the privacy line. */
+    /** Left x of a profile row, exposed so the report line can be hit-tested
+     *  against the same number the renderer drew it from. */
+    fun labelXFor(layout: SubScreenLayout): Float = layout.labelX()
+
+    fun reportLayout(rows: Int): SubScreenLayout =
+        subLayout(rows = rows + 2, pillRows = false)
+
     fun settingsLayout(): SubScreenLayout = subLayout(rows = Setting.values().size, pillRows = true)
 
     /** Width of the slider track on a settings row. */

@@ -168,14 +168,29 @@ class MenuRenderer(
         Widgets.pill(batch, font, pixel, pill.cx, pill.cy, Strings.t("back"), scale = state.scale.factor)
     }
 
-    fun drawProfileScreen(state: MenuState, geometry: MenuGeometry) {
+    fun drawProfileScreen(
+        state: MenuState,
+        geometry: MenuGeometry,
+        showReportLine: Boolean = false,
+    ) {
         Widgets.text(batch, titleFont, Strings.t("profile"), geometry.screenWidth / 2f, geometry.subScreenTitleCy())
         val back = geometry.backPill()
         Widgets.pill(batch, font, pixel, back.cx, back.cy, Strings.t("back"), scale = state.scale.factor)
+        val layout = geometry.profileLayout()
         val ach = geometry.achievementsPill(Achievements.count(), Achievements.ALL.size)
         Widgets.pill(batch, font, pixel, ach.cx, ach.cy, achLabelText(), scale = state.scale.factor)
+        val reportLineY = layout.rowBaseline(6) + layout.rowHeight * 0.9f
+        // The run report is opt-in, so it gets a line rather than a permanent
+        // button: a player who never asked for their dive history should not
+        // have a tile for it on their profile.
+        if (showReportLine) {
+            font.color = Color(0.6f, 0.75f, 0.85f, 1f)
+            Widgets.textLeft(batch, font, Strings.t("yourDives"), layout.labelX(), reportLineY)
+            font.color = Color.CYAN
+            Widgets.textRight(batch, font, Strings.t("view"), layout.valueX(), reportLineY)
+            font.color = Color.WHITE
+        }
 
-        val layout = geometry.profileLayout()
         Widgets.panel(batch, pixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
 
         val stats = listOf(
@@ -389,6 +404,36 @@ class MenuRenderer(
             Widgets.text(batch, font, option.description, layout.panelCx, cy - layout.rowHeight * 0.2f)
             font.color = Color.WHITE
         }
+    }
+
+    /**
+     * The player's own run numbers.
+     *
+     * Deliberately plain: a title, a handful of figures, and a line saying they
+     * never left the device. No chart, because a chart on a phone is a chart you
+     * cannot read in a bug report, and the point of this screen is that the
+     * numbers can be copied somewhere and argued about.
+     */
+    fun drawReportScreen(
+        state: MenuState,
+        geometry: MenuGeometry,
+        lines: List<Pair<String, String>>,
+        privacy: String,
+    ) {
+        drawSubScreenHeader(Strings.t("yourDives"), geometry, state)
+        val layout = geometry.reportLayout(lines.size)
+        Widgets.panel(batch, pixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
+
+        font.color = Color.WHITE
+        lines.forEachIndexed { i, (label, value) ->
+            Widgets.textLeft(batch, font, label, layout.labelX(), layout.rowBaseline(i))
+            font.color = Color.CYAN
+            Widgets.textRight(batch, font, value, layout.valueX(), layout.rowBaseline(i))
+            font.color = Color.WHITE
+        }
+        font.color = Color(0.6f, 0.7f, 0.8f, 1f)
+        Widgets.text(batch, font, privacy, layout.panelCx, layout.rowY(lines.size + 1))
+        font.color = Color.WHITE
     }
 
     fun drawShopScreen(state: MenuState, geometry: MenuGeometry) {

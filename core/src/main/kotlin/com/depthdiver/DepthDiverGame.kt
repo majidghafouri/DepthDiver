@@ -32,6 +32,7 @@ import com.depthdiver.cosmetic.Cosmetics
 import com.depthdiver.menu.CosmeticBrowserView
 import com.depthdiver.monet.PurchaseResult
 import com.depthdiver.analytics.AnalyticsReport
+import com.depthdiver.analytics.AnalyticsSettings
 import com.depthdiver.analytics.RunSample
 import com.depthdiver.mutation.HazardFamily
 import com.depthdiver.mutation.MutationDeck
@@ -1683,11 +1684,12 @@ class DepthDiverGame : ApplicationAdapter() {
             }
 
             GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP,
-            GameState.COSMETICS, GameState.ACHIEVEMENTS -> {
+            GameState.COSMETICS, GameState.ACHIEVEMENTS, GameState.REPORT -> {
                 if (Gdx.input.justTouched()) {
                     when (state) {
                         GameState.SHOP -> handleShopTouch(touchX(), touchY())
                         GameState.COSMETICS -> handleCosmeticsTouch(touchX(), touchY())
+                        GameState.REPORT -> handleReportTouch(touchX(), touchY())
                         GameState.PROFILE -> handleProfileTouch(touchX(), touchY())
                         else -> handleSubScreenTouch(touchX(), touchY())
                     }
@@ -1838,6 +1840,16 @@ class DepthDiverGame : ApplicationAdapter() {
             goToMenu()
             return
         }
+        if (AnalyticsSettings.isVisible() || AnalyticsReport.runs() > 0) {
+            val profileLayout = menu().profileLayout()
+            val lineY = profileLayout.rowBaseline(6) + profileLayout.rowHeight * 0.9f
+            if (Widgets.contains(tx, ty, menu().labelXFor(profileLayout), lineY, profileLayout.panelW * 0.7f, profileLayout.rowHeight)) {
+                AnalyticsSettings.setVisible(true)
+                dispatch(GameAction.OpenReport)
+                audio.playClick()
+                return
+            }
+        }
         val ach = menu().achievementsPill(Achievements.count(), Achievements.ALL.size)
         if (Widgets.containsTouch(tx, ty, ach.cx, ach.cy, ach.w, ach.h, uiScale.minTouchPx)) {
             dispatch(GameAction.OpenAchievements)
@@ -1984,6 +1996,34 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
             }
         }
+    }
+
+    // --- run report --------------------------------------------------------
+
+    /** The figures shown on the report screen, already localized. */
+    private fun reportLines(): List<Pair<String, String>> {
+        val n = AnalyticsReport.runs()
+        if (n == 0) {
+            return listOf(Strings.t("reportNoRuns") to "")
+        }
+        val p = AnalyticsReport.prefsForDisplay()
+        val avgDepth = p.first / n
+        val avgSeconds = p.second / n
+        return listOf(
+            Strings.t("reportRuns") to "$n",
+            Strings.t("reportTypicalStop") to "${(avgDepth / 10f).toInt() * 10} m",
+            Strings.t("reportAvgDepth") to "${avgDepth.toInt()} m",
+            Strings.t("reportAvgLength") to "${avgSeconds.toInt()} s",
+            Strings.t("reportBestDepth") to "${AnalyticsReport.bestDepth().toInt()} m",
+            Strings.t("reportBestScore") to "${AnalyticsReport.bestScore()}",
+            Strings.t("reportOxygen") to "${AnalyticsReport.oxygenDeaths()}",
+            Strings.t("reportHazard") to "${AnalyticsReport.hazardDeaths()}",
+        )
+    }
+
+    private fun handleReportTouch(tx: Float, ty: Float) {
+        val back = menu().backPill()
+        if (Widgets.contains(tx, ty, back.cx, back.cy, back.w, back.h)) goToMenu()
     }
 
     private fun handleShopTouch(tx: Float, ty: Float) {
@@ -2207,7 +2247,10 @@ class DepthDiverGame : ApplicationAdapter() {
                 GameState.MAIN_MENU -> renderer.drawMainMenu(menuState, geometry, menuFbo)
                 GameState.PROFILE -> {
                     renderer.drawBackground(menuState, geometry, menuFbo)
-                    renderer.drawProfileScreen(menuState, geometry)
+                    renderer.drawProfileScreen(
+                        menuState, geometry,
+                        showReportLine = AnalyticsSettings.isVisible(),
+                    )
                 }
                 GameState.LEADERBOARD -> {
                     renderer.drawBackground(menuState, geometry, menuFbo)
@@ -2247,6 +2290,12 @@ class DepthDiverGame : ApplicationAdapter() {
                 GameState.COSMETICS -> {
                     renderer.drawBackground(menuState, geometry, menuFbo)
                     renderer.drawCosmeticsScreen(menuState, geometry, cosmeticsView())
+                }
+                GameState.REPORT -> {
+                    renderer.drawBackground(menuState, geometry, menuFbo)
+                    renderer.drawReportScreen(
+                        menuState, geometry, reportLines(), Strings.t("yourDivesPrivacy"),
+                    )
                 }
                 GameState.PLAYING, GameState.PAUSED, GameState.GAME_OVER -> {}
             }

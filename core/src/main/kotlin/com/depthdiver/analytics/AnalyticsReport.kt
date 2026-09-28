@@ -73,6 +73,15 @@ object AnalyticsReport {
 
     fun runs(): Int = prefs().getInteger(KEY_RUNS, 0)
 
+    fun oxygenDeaths(): Int = prefs().getInteger(KEY_OXYGEN, 0)
+
+    fun hazardDeaths(): Int = prefs().getInteger(KEY_HAZARD, 0)
+
+    /** Depth and seconds totals, so the game can derive averages without
+     *  reaching into the store itself. */
+    fun prefsForDisplay(): Pair<Float, Float> =
+        prefs().getFloat(KEY_DEPTH_SUM, 0f) to prefs().getFloat(KEY_SECONDS_SUM, 0f)
+
     fun bestDepth(): Float = prefs().getFloat(KEY_DEPTH_MAX, 0f)
 
     fun bestScore(): Int = prefs().getInteger(KEY_SCORE_MAX, 0)

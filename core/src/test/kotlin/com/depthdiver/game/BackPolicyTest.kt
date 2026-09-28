@@ -19,7 +19,7 @@ class BackPolicyTest {
         assertEquals(BackAction.EXIT, backActionFor(GameState.MAIN_MENU))
         for (state in listOf(
             GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP,
-            GameState.COSMETICS, GameState.ACHIEVEMENTS,
+            GameState.COSMETICS, GameState.ACHIEVEMENTS, GameState.REPORT,
         )) {
             assertEquals(BackAction.MAIN_MENU, backActionFor(state), "$state must not exit the app")
         }
