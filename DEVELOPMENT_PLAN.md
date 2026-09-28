@@ -126,9 +126,52 @@ not available: the emulator would not hold a landscape viewport and its surface
 froze mid-run.
 
 ### Phase 15: Monetization (Optional)
-- [ ] Optional cosmetic purchases
-- [ ] Ad integration (opt-in rewarded ads)
-- [ ] Battle pass / season system
+Built as seams, not as live purchases. Nothing in this phase can charge anyone yet,
+by design: see the "store wiring needed" list at the end of this section.
+
+- [x] Cosmetic catalog + ownership (`dd2e893`)
+  (`Cosmetics`, `Economy`. A cosmetic is two colours and nothing else, so there is
+  no stat to balance and no way a purchase makes a run easier. The default entry
+  is the colour the diver already had, so an install that bought nothing looks
+  unchanged. `COSMETICS` is a real menu screen with a live swatch.)
+- [x] Purchase seam (`dd2e893`)
+  (`PurchaseService` mirrors `LeaderboardService`/`CloudSaveService`.
+  `LocalPurchases` **refuses** every purchase when it has no billing backend
+  rather than granting it, so a shipping build wired up by mistake cannot hand
+  out paid content. `PurchaseResult` distinguishes granted / cancelled / failed /
+  already-owned, because a cancelled sheet that reads as a grant is how someone
+  gets charged for something they did not buy.)
+- [x] Rewarded ads, opt-in (`dd2e893`)
+  (`AdService`. Off by default; an unanswered consent prompt is a no, never an
+  accidental yes. Rewarded video only -- no interstitial, no banner. Nothing pays
+  out unless the ad reports `Earned`.)
+- [x] Battle pass / season system (`dd2e893`)
+  (`SeasonPass`. 30 tiers, free and premium tracks. XP comes only from finished
+  runs: a pass whose paid tier were also the faster tier would be charging people
+  to keep up. Premium unlocks only when the store reports a grant. A run is
+  credited once by run id, and a tier cannot be claimed twice.)
+
+**Store wiring needed before this can charge anyone.** All of it is the user's
+side, not code:
+1. Google Play Console: create the app listing, an in-app product per cosmetic
+   and for the season pass, set prices, and add licence testers for internal
+   testing. `ProductDetails.Sku` values must match the `productId` fields in
+   `Cosmetics`.
+2. The Play Billing artifact added to `app/build.gradle.kts`, and
+   `PlayBillingPurchases : PurchaseService` implemented against it, then
+   `Purchases.install(...)` at startup. The `Purchases` seam is the only place
+   that changes.
+3. An AdMob app ID and a rewarded ad unit ID, then `AdMobAds : AdService` and
+   `Ads.install(...)`. Only if ads are wanted at all.
+4. A real consent flow (GDPR/UK GDPR and similar) feeding `AdService.consented`.
+   The current value is a plain boolean and is not a compliance answer.
+5. Age rating, data safety form, and a privacy policy covering purchase and ad
+   data -- all required by Play before an app with IAP or ads can ship.
+
+**Blocked note.** Steps 1-4 need artifacts from `maven.google.com`, which has been
+returning 404 in this environment (the same reason online leaderboards and cloud
+save remain local-only). The seams are ready; only the dependency and the
+credentials are missing.
 
 ---
 
