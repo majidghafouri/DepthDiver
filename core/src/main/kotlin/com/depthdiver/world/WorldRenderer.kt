@@ -9,6 +9,11 @@ import com.depthdiver.entity.Hazard
 import com.depthdiver.game.WORLD_WIDTH_METERS
 import com.depthdiver.entity.Pickup
 
+/** Arcs in the boss projectile telegraph, and how far they fan apart. */
+private const val PROJECTILE_ARCS = 3
+private const val PROJECTILE_ARC_SPREAD = 0.5f
+private const val PROJECTILE_ARC_REACH = 6f
+
 /**
  * Draws the world: the water gradient, the light shafts, the drifting fish, the
  * entities, the particles and the diver.
@@ -184,16 +189,22 @@ class WorldRenderer(
                 font.draw(batch, "⚡", cx - 0.4f, ey)
             }
             Hazard.BossPattern.PROJECTILE -> {
-                // All three arcs draw at the same x. The per-arc angle and
-                // targetX are computed but unused, so the telegraph reads as a
-                // single bar rather than a spread. Kept exactly as it was: this
-                // is a move, and changing a boss's look inside a refactor is how
-                // behaviour changes slip through unreviewed. It is a real bug,
-                // but it is a separate change with its own decision.
-                for (i in 0 until 3) {
+                // Three arcs fanned either side of the boss. These once all drew
+                // at `cx`, so the telegraph read as a single bar and the player
+                // could not tell a spread from a column -- there was nothing to
+                // dodge around. The angle that was computed and thrown away is
+                // what places them.
+                for (i in 0 until PROJECTILE_ARCS) {
+                    val angle = -MathUtils.PI / 2f + (i - (PROJECTILE_ARCS - 1) / 2f) * PROJECTILE_ARC_SPREAD
                     val targetY = boss.rect.y - 10f
                     batch.setColor(0.8f, 0.4f, 0.1f, intensity * 0.4f)
-                    batch.draw(pixel, cx - 0.2f, boss.rect.y - 0.2f, 0.4f, (targetY - boss.rect.y) * progress)
+                    batch.draw(
+                        pixel,
+                        cx + MathUtils.cos(angle) * PROJECTILE_ARC_REACH - 0.2f,
+                        boss.rect.y - 0.2f,
+                        0.4f,
+                        (targetY - boss.rect.y) * progress,
+                    )
                 }
             }
             else -> {}
