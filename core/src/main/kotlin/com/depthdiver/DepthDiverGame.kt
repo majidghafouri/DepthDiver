@@ -301,7 +301,16 @@ class DepthDiverGame : ApplicationAdapter() {
     private var hudPauseH = 0f
 
     private val audio = AudioManager()
-    private val economy = Economy(Profile.preferences())
+
+    /**
+     * Built in [create], not as a field.
+     *
+     * `Economy` reaches for preferences on construction, and a field
+     * initializer runs before libGDX has an `Application`, so building it here
+     * crashed the game on launch. Anything that touches Gdx has to wait for
+     * create() even if it does not look like it does.
+     */
+    private lateinit var economy: Economy
 
     private fun redOf(rgb: Int) = (rgb shr 16 and 0xFF) / 255f
     private fun greenOf(rgb: Int) = (rgb shr 8 and 0xFF) / 255f
@@ -460,6 +469,7 @@ class DepthDiverGame : ApplicationAdapter() {
         applyUpgrades()
         audio.init()
 
+        economy = Economy(Profile.preferences())
         applyCosmetic(economy.equippedCosmetic())
 
         val rockPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
