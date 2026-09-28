@@ -31,6 +31,10 @@ import com.depthdiver.cosmetic.Cosmetic
 import com.depthdiver.cosmetic.Cosmetics
 import com.depthdiver.menu.CosmeticBrowserView
 import com.depthdiver.monet.PurchaseResult
+import com.depthdiver.mutation.HazardFamily
+import com.depthdiver.mutation.MutationDeck
+import com.depthdiver.mutation.MutationEffects
+import com.depthdiver.mutation.MutationOption
 import com.depthdiver.monet.Purchases
 import com.depthdiver.menu.FontMenuText
 import com.depthdiver.monet.Economy
@@ -171,6 +175,9 @@ internal const val BOSS_WARNING_STEP = 0.85f
 internal const val MAX_CURRENT_PUSH = 14f
 
 internal const val BIOME_BANNER_FADE = 0.6f
+
+/** How often a run offers a mutation. Roughly three picks in a deep dive. */
+internal const val MUTATION_EVERY_METERS = 120f
 
 internal fun bossCountdownStep(warningRemaining: Float): Int =
     (3 - (warningRemaining / BOSS_WARNING_STEP).toInt()).coerceIn(1, 3)
@@ -1143,7 +1150,8 @@ class DepthDiverGame : ApplicationAdapter() {
             )
             else -> MoveDirection.ZERO
         }
-        playerX = (playerX + direction.x * playerSpeed * delta).coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
+        playerX = (playerX + direction.x * playerSpeed * mutationEffects().playerSpeed * delta)
+            .coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
         playerX = (playerX + currentPush() * delta).coerceIn(playerRadius, WORLD_WIDTH_METERS - playerRadius)
         playerY = (playerY + direction.y * playerSpeed * delta).coerceAtMost(-playerRadius)
         depth = max(0f, -playerY)
@@ -1154,7 +1162,8 @@ class DepthDiverGame : ApplicationAdapter() {
 
         elapsed += delta
         val diff = currentDifficulty()
-        oxygen -= delta * DifficultyCurve.oxygenDrain(diff.drain, depth)
+        val fx = mutationEffects()
+        oxygen -= delta * DifficultyCurve.oxygenDrain(diff.drain, depth) * fx.oxygenDrain
         if (oxygen <= 0f) {
             oxygen = 0f
             endGame(RunTerminalReason.OXYGEN)
@@ -1192,19 +1201,25 @@ class DepthDiverGame : ApplicationAdapter() {
             baseMetersPerSecond = diff.baseScrollMeters,
             rampMetersPerSecond = diff.rampMetersPerSecond,
             depthMeters = depth,
-            playerSpeedMetersPerSecond = playerSpeed,
-        )
+            playerSpeedMetersPerSecond = playerSpeed * fx.playerSpeed,
+        ) * fx.scrollSpeed
 
         hazardTimer -= delta
         if (hazardTimer <= 0) {
             spawnHazard()
             val interval = DifficultyCurve.hazardIntervalRange(1.4f, 2.6f, depth, diff.spawnMul)
-            hazardTimer = fairness.range(interval.minimum, interval.maximum)
+            hazardTimer = fairness.range(interval.minimum, interval.maximum) * fx.hazardInterval
         }
         pickupTimer -= delta
         if (pickupTimer <= 0) {
             spawnPickup()
-            pickupTimer = fairness.pickupInterval(3f, 5.5f, diff.pickupMul)
+            pickupTimer = fairness.pickupInterval(3f, 5.5f, diff.pickupMul) * fx.pickupInterval
+        }
+
+        // A milestone is the moment a pick feels earned rather than interrupted.
+        if (depth >= nextMilestone) {
+            nextMilestone += 50f
+            offerMutationPick()
         }
 
         updateEntities(delta, scrollSpeed)
@@ -1249,6 +1264,12 @@ class DepthDiverGame : ApplicationAdapter() {
                     }
                 }
                 ShieldCollisionResult.FATAL -> {
+                    if (mutationEffects().harmless.contains(familyOf(hazard))) {
+                        // Spared by a mutation: it still shoves the player around,
+                        // it just does not end the run.
+                        audio.playAlert()
+                        continue
+                    }
                     if (isBoss) {
                         audio.playCrash()
                         triggerShake(0.3f, 0.6f, MathUtils.PI)
@@ -1288,7 +1309,7 @@ class DepthDiverGame : ApplicationAdapter() {
                         val window = 5f + upgradeComboLevel * 2f
                         comboTimer = window
                         maxComboWindow = window
-                        val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5)).toInt()
+                        val pearlValue = (5 * (1 + upgradePearlValueLevel * 0.5) * fx.pearlValue).toInt()
                         ledger.collectPearl(pearlValue, pearlValue * combo)
                         Profile.grantPearls(pearlValue)
                         checkpointActiveRun()
@@ -1356,6 +1377,17 @@ class DepthDiverGame : ApplicationAdapter() {
         audio.playAlert()
     }
 
+    /** Which mutation-protected family a hazard belongs to. */
+    private fun familyOf(hazard: Hazard): HazardFamily? = when (hazard) {
+        is Hazard.Rock -> HazardFamily.ROCK
+        is Hazard.Mine -> HazardFamily.MINE
+        is Hazard.Jellyfish -> HazardFamily.JELLYFISH
+        is Hazard.Angler -> HazardFamily.ANGLER
+        is Hazard.Vortex -> HazardFamily.VORTEX
+        is Hazard.Eel -> HazardFamily.EEL
+        is Hazard.Shark -> HazardFamily.SHARK
+    }
+
     private fun currentPush(): Float {
         var push = 0f
         for (hazard in hazards) {
@@ -1364,7 +1396,7 @@ class DepthDiverGame : ApplicationAdapter() {
             val centerY = hazard.rect.y + hazard.rect.height / 2f
             push += vortexPush(playerX - centerX, playerY - centerY, hazard.radius, hazard.strength)
         }
-        return push.coerceIn(-MAX_CURRENT_PUSH, MAX_CURRENT_PUSH)
+        return (push * mutationEffects().currentPush).coerceIn(-MAX_CURRENT_PUSH, MAX_CURRENT_PUSH)
     }
 
     private fun updateEntities(delta: Float, scrollSpeed: Float) {
@@ -1650,6 +1682,12 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
             }
 
+            GameState.MUTATION_SELECT -> {
+                if (Gdx.input.justTouched()) {
+                    handleMutationTouch(touchX(), touchY())
+                }
+            }
+
             GameState.PLAYING -> {
                 if (mJust) {
                     audio.toggleMute()
@@ -1805,6 +1843,67 @@ class DepthDiverGame : ApplicationAdapter() {
                 achievementToastTimer = 2.5f
                 audio.playClick()
             }
+        }
+    }
+
+    // --- mutations ---------------------------------------------------------
+
+    private val mutations = MutationDeck()
+
+    /** Every mutation a run has picked up, combined. */
+    private fun mutationEffects(): MutationEffects = mutations.effects
+
+    /** Depth at which the next pick is offered, and the depth of the last one. */
+    private var nextMutationDepth = MUTATION_EVERY_METERS
+    private var lastMutationDepth = 0f
+
+    /**
+     * Open the pick screen, unless the run is not in a state to.
+     *
+     * Called from the simulation rather than on a timer, so a dive that ends
+     * early never opens a screen nobody chose to answer.
+     */
+    private fun offerMutationPick() {
+        if (state != GameState.PLAYING) return
+        if (depth < nextMutationDepth) return
+        nextMutationDepth += MUTATION_EVERY_METERS
+        lastMutationDepth = depth
+        dispatch(GameAction.OpenMutationSelect)
+    }
+
+    private fun mutationOptions(): List<MutationOption> = mutations.offers().map { m ->
+        MutationOption(
+            id = m.id,
+            name = Strings.t(m.nameKey),
+            description = Strings.t(m.descriptionKey),
+            rarity = m.rarity,
+        )
+    }
+
+    private fun drawMutationScreen(geometry: MenuGeometry, menuState: MenuState) {
+        menus().drawMutationSelect(
+            menuState,
+            geometry,
+            Strings.t(if (lastMutationDepth <= 0f) "mutationChooseFirst" else "mutationChooseMore"),
+            mutationOptions(),
+        )
+    }
+
+    private fun handleMutationTouch(tx: Float, ty: Float) {
+        val layout = menu().mutationSelectLayout(mutations.offers().size)
+        val options = mutations.offers()
+        for (i in options.indices) {
+            val box = menu().mutationOptionBox(layout, i)
+            if (!Widgets.contains(tx, ty, box.cx, box.cy, box.w, box.h)) continue
+            val taken = mutations.take(i) ?: return
+            audio.playClick()
+            achievementToast = "${Strings.t("mutation")}: ${Strings.t(taken.nameKey)}"
+            achievementToastTimer = 2.5f
+            // Air granted by a mutation applies the moment it is taken, not at
+            // the next reset, or picking "Second Wind" mid-run would do nothing.
+            oxygen = (oxygen + taken.effects.startingOxygen).coerceAtMost(maxOxygen)
+            dispatch(GameAction.TakeMutation)
+            return
         }
     }
 
@@ -2126,6 +2225,12 @@ class DepthDiverGame : ApplicationAdapter() {
                             settingEnabled(Setting.SCREEN_SHAKE),
                         ),
                     )
+                }
+                GameState.MUTATION_SELECT -> {
+                    // Deliberately the world underneath, dimmed: the player should
+                    // still see the dive they are choosing a mutation for.
+                    renderer.drawBackground(menuState, geometry, menuFbo)
+                    drawMutationScreen(geometry, menuState)
                 }
                 GameState.COSMETICS -> {
                     renderer.drawBackground(menuState, geometry, menuFbo)
@@ -2503,6 +2608,10 @@ class DepthDiverGame : ApplicationAdapter() {
         elapsed = 0f
         hazardTimer = 1f
         pickupTimer = 2f
+        // A run's mutations belong to that run.
+        mutations.clear()
+        nextMutationDepth = MUTATION_EVERY_METERS
+        lastMutationDepth = 0f
         combo = 1
         comboTimer = 0f
         shieldActive = false

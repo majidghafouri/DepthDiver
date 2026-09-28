@@ -17,7 +17,10 @@ class BackPolicyTest {
     @Test
     fun backExitsOnlyFromTheMainMenu() {
         assertEquals(BackAction.EXIT, backActionFor(GameState.MAIN_MENU))
-        for (state in listOf(GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP, GameState.ACHIEVEMENTS)) {
+        for (state in listOf(
+            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP,
+            GameState.COSMETICS, GameState.ACHIEVEMENTS,
+        )) {
             assertEquals(BackAction.MAIN_MENU, backActionFor(state), "$state must not exit the app")
         }
     }

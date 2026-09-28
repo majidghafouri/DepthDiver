@@ -203,6 +203,19 @@ class MenuGeometry(
         )
     }
 
+    /**
+     * A pick screen: a title, then two lines per option.
+     *
+     * A title row plus [options] options at two rows each, so the spacing between
+     * choices stays the same however many are on offer.
+     */
+    fun mutationSelectLayout(options: Int): SubScreenLayout =
+        subLayout(rows = 1 + options * 2, pillRows = false)
+
+    /** Box for option [index] on the pick screen. */
+    fun mutationOptionBox(layout: SubScreenLayout, index: Int): MenuRect =
+        MenuRect(layout.panelCx, layout.rowY(1 + index * 2), layout.panelW * 0.8f, layout.gap * 1.5f)
+
     fun settingsLayout(): SubScreenLayout = subLayout(rows = Setting.values().size, pillRows = true)
 
     /** Width of the slider track on a settings row. */

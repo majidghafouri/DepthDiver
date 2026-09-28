@@ -16,6 +16,8 @@ import com.depthdiver.Profile
 import com.depthdiver.Widgets
 import com.depthdiver.common.Strings
 import com.depthdiver.game.SubScreenLayout
+import com.depthdiver.mutation.MutationOption
+import com.depthdiver.mutation.MutationRarity
 import kotlin.math.min
 
 /**
@@ -352,6 +354,42 @@ class MenuRenderer(
     private fun red(rgb: Int) = (rgb shr 16 and 0xFF) / 255f
     private fun green(rgb: Int) = (rgb shr 8 and 0xFF) / 255f
     private fun blue(rgb: Int) = (rgb and 0xFF) / 255f
+
+    /**
+     * Pick-one-of-three.
+     *
+     * The three are always on screen together with their full text, because a
+     * trade the player cannot read is not a decision. The chosen one does not
+     * take effect until the tap, so the screen can be read as a considered
+     * choice rather than a menu that already applied something.
+     */
+    fun drawMutationSelect(
+        state: MenuState,
+        geometry: MenuGeometry,
+        title: String,
+        options: List<MutationOption>,
+    ) {
+        val layout = geometry.mutationSelectLayout(options.size)
+        Widgets.panel(batch, pixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
+
+        font.color = Color.GOLD
+        Widgets.text(batch, font, title, layout.panelCx, layout.panelTop - layout.rowHeight * 0.4f)
+        font.color = Color.WHITE
+
+        options.forEachIndexed { i, option ->
+            val cy = layout.rowY(i)
+            // A rarity colour, so a run-defining pick looks like one.
+            font.color = when (option.rarity) {
+                MutationRarity.COMMON -> Color(0.8f, 0.85f, 0.9f, 1f)
+                MutationRarity.RARE -> Color(0.45f, 0.8f, 1f, 1f)
+                MutationRarity.EPIC -> Color(1f, 0.75f, 0.4f, 1f)
+            }
+            Widgets.text(batch, font, option.name, layout.panelCx, cy + layout.rowHeight * 0.18f)
+            font.color = Color(0.75f, 0.82f, 0.9f, 1f)
+            Widgets.text(batch, font, option.description, layout.panelCx, cy - layout.rowHeight * 0.2f)
+            font.color = Color.WHITE
+        }
+    }
 
     fun drawShopScreen(state: MenuState, geometry: MenuGeometry) {
         drawSubScreenHeader(Strings.t("shop"), geometry, state)

@@ -6,6 +6,7 @@ enum class GameState {
     LEADERBOARD,
     SHOP,
     COSMETICS,
+    MUTATION_SELECT,
     ACHIEVEMENTS,
     SETTINGS,
     PLAYING,
@@ -29,6 +30,7 @@ fun backActionFor(state: GameState): BackAction = when (state) {
     GameState.LEADERBOARD,
     GameState.SHOP,
     GameState.COSMETICS,
+    GameState.MUTATION_SELECT,
     GameState.ACHIEVEMENTS,
     GameState.SETTINGS,
     -> BackAction.MAIN_MENU
@@ -47,6 +49,8 @@ sealed interface GameAction {
     data object OpenLeaderboard : GameAction
     data object OpenShop : GameAction
     data object OpenCosmetics : GameAction
+    data object OpenMutationSelect : GameAction
+    data object TakeMutation : GameAction
     data object OpenAchievements : GameAction
     data object OpenSettings : GameAction
     data object MainMenu : GameAction
@@ -68,6 +72,10 @@ sealed interface GameAction {
             Resume,
             Restart,
             EndRun,
+            OpenCosmetics,
+            OpenShop,
+            OpenMutationSelect,
+            TakeMutation,
         )
     }
 }
@@ -103,7 +111,16 @@ data class GameFlow(val state: GameState = GameState.MAIN_MENU) {
         }
         GameState.ACHIEVEMENTS -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
         GameState.SETTINGS -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
+        GameState.MUTATION_SELECT -> when (action) {
+            GameAction.TakeMutation -> GameState.PLAYING
+            // Back must work here. A pick screen whose only exit is "pick one of
+            // these" is a soft-lock the moment its boxes are not reachable, and
+            // the back policy test exists precisely to catch that.
+            GameAction.MainMenu -> GameState.MAIN_MENU
+            else -> null
+        }
         GameState.PLAYING -> when (action) {
+            GameAction.OpenMutationSelect -> GameState.MUTATION_SELECT
             GameAction.Pause -> GameState.PAUSED
             GameAction.Restart -> GameState.PLAYING
             GameAction.MainMenu -> GameState.MAIN_MENU

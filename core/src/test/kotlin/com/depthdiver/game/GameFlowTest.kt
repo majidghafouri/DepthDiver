@@ -28,9 +28,14 @@ class GameFlowTest {
             GameAction.OpenShop to GameState.SHOP,
             GameAction.MainMenu to GameState.MAIN_MENU,
         ),
+        GameState.MUTATION_SELECT to mapOf(
+            GameAction.TakeMutation to GameState.PLAYING,
+            GameAction.MainMenu to GameState.MAIN_MENU,
+        ),
         GameState.ACHIEVEMENTS to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.SETTINGS to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.PLAYING to mapOf(
+            GameAction.OpenMutationSelect to GameState.MUTATION_SELECT,
             GameAction.Pause to GameState.PAUSED,
             GameAction.Restart to GameState.PLAYING,
             GameAction.MainMenu to GameState.MAIN_MENU,
@@ -138,6 +143,7 @@ class GameFlowTest {
             GameState.LEADERBOARD,
             GameState.SHOP,
             GameState.COSMETICS,
+            GameState.MUTATION_SELECT,
             GameState.ACHIEVEMENTS,
             GameState.PLAYING,
             GameState.PAUSED,

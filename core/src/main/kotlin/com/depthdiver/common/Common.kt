@@ -53,6 +53,24 @@ object Strings {
         "cosmetics" to "COSMETICS", "equip" to "EQUIP", "equipped" to "EQUIPPED",
         "buy" to "BUY", "locked" to "LOCKED",
         "cosmeticsHint" to "Appearance only - never affects a run",
+        // Mutations
+        "mutation" to "MUTATION",
+        "mutationChooseFirst" to "CHOOSE A MUTATION",
+        "mutationChooseMore" to "CHOOSE ANOTHER",
+        "mutationGreedy" to "GREEDY", "mutationGreedyDesc" to "Pearls x2, oxygen drains 35% faster",
+        "mutationCautious" to "CAUTIOUS", "mutationCautiousDesc" to "Pearls x0.7, oxygen drains 30% slower",
+        "mutationBargain" to "BARGAIN", "mutationBargainDesc" to "Pearls x1.5, currents 25% stronger",
+        "mutationIronLungs" to "IRON LUNGS", "mutationIronLungsDesc" to "Oxygen drains 25% slower, you move 10% slower",
+        "mutationSecondWind" to "SECOND WIND", "mutationSecondWindDesc" to "Start with extra air, score x0.8",
+        "mutationDeepLungs" to "DEEP LUNGS", "mutationDeepLungsDesc" to "Oxygen drains 45% slower, currents 30% stronger",
+        "mutationClouds" to "CLOUDS", "mutationCloudsDesc" to "Pickups 2x more often, oxygen drains 20% faster",
+        "mutationOpenWater" to "OPEN WATER", "mutationOpenWaterDesc" to "Hazards 70% less often, score x0.75",
+        "mutationThickWater" to "THICK WATER", "mutationThickWaterDesc" to "Hazards closer, currents 50% stronger, score x1.4",
+        "mutationGhostly" to "GHOSTLY", "mutationGhostlyDesc" to "Mines and rocks cannot end the run, you move 12% slower",
+        "mutationJellyproof" to "JELLYPROOF", "mutationJellyproofDesc" to "Jellyfish cannot end the run, you move 8% slower",
+        "mutationGilded" to "GILDED", "mutationGildedDesc" to "Pickups 2.5x more often, currents 45% stronger",
+        "mutationNomad" to "NOMAD", "mutationNomadDesc" to "Score x1.35, oxygen drains 15% faster",
+        "mutationDrift" to "DRIFT", "mutationDriftDesc" to "Currents 2.2x stronger, oxygen drains 20% slower",
     )
     
     private val ES = mapOf(
