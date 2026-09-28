@@ -5,6 +5,7 @@ enum class GameState {
     PROFILE,
     LEADERBOARD,
     SHOP,
+    COSMETICS,
     ACHIEVEMENTS,
     SETTINGS,
     PLAYING,
@@ -27,6 +28,7 @@ fun backActionFor(state: GameState): BackAction = when (state) {
     GameState.PROFILE,
     GameState.LEADERBOARD,
     GameState.SHOP,
+    GameState.COSMETICS,
     GameState.ACHIEVEMENTS,
     GameState.SETTINGS,
     -> BackAction.MAIN_MENU
@@ -44,6 +46,7 @@ sealed interface GameAction {
     data object OpenProfile : GameAction
     data object OpenLeaderboard : GameAction
     data object OpenShop : GameAction
+    data object OpenCosmetics : GameAction
     data object OpenAchievements : GameAction
     data object OpenSettings : GameAction
     data object MainMenu : GameAction
@@ -82,6 +85,7 @@ data class GameFlow(val state: GameState = GameState.MAIN_MENU) {
             GameAction.OpenProfile -> GameState.PROFILE
             GameAction.OpenLeaderboard -> GameState.LEADERBOARD
             GameAction.OpenShop -> GameState.SHOP
+            GameAction.OpenCosmetics -> GameState.COSMETICS
             GameAction.OpenSettings -> GameState.SETTINGS
             else -> null
         }
@@ -92,6 +96,11 @@ data class GameFlow(val state: GameState = GameState.MAIN_MENU) {
         }
         GameState.LEADERBOARD -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
         GameState.SHOP -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
+        GameState.COSMETICS -> when (action) {
+            GameAction.OpenShop -> GameState.SHOP
+            GameAction.MainMenu -> GameState.MAIN_MENU
+            else -> null
+        }
         GameState.ACHIEVEMENTS -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
         GameState.SETTINGS -> if (action == GameAction.MainMenu) GameState.MAIN_MENU else null
         GameState.PLAYING -> when (action) {

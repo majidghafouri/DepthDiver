@@ -15,6 +15,7 @@ class GameFlowTest {
             GameAction.OpenProfile to GameState.PROFILE,
             GameAction.OpenLeaderboard to GameState.LEADERBOARD,
             GameAction.OpenShop to GameState.SHOP,
+            GameAction.OpenCosmetics to GameState.COSMETICS,
             GameAction.OpenSettings to GameState.SETTINGS,
         ),
         GameState.PROFILE to mapOf(
@@ -23,6 +24,10 @@ class GameFlowTest {
         ),
         GameState.LEADERBOARD to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.SHOP to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
+        GameState.COSMETICS to mapOf(
+            GameAction.OpenShop to GameState.SHOP,
+            GameAction.MainMenu to GameState.MAIN_MENU,
+        ),
         GameState.ACHIEVEMENTS to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.SETTINGS to mapOf(GameAction.MainMenu to GameState.MAIN_MENU),
         GameState.PLAYING to mapOf(
@@ -132,6 +137,7 @@ class GameFlowTest {
         for (state in listOf(
             GameState.LEADERBOARD,
             GameState.SHOP,
+            GameState.COSMETICS,
             GameState.ACHIEVEMENTS,
             GameState.PLAYING,
             GameState.PAUSED,

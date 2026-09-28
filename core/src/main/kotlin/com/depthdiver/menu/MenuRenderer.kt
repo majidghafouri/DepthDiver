@@ -124,6 +124,7 @@ class MenuRenderer(
         Strings.t("profile"),
         Strings.t("leaderboard"),
         Strings.t("shop"),
+        Strings.t("cosmetics"),
         Strings.t("settings"),
         if (state.muted) Strings.t("muteOn") else Strings.t("muteOff"),
         Strings.t("quit"),
@@ -279,6 +280,79 @@ class MenuRenderer(
         font.color = Color.WHITE
     }
 
+    /**
+     * Cosmetics browser.
+     *
+     * Appearance only, and the copy says so. A shop that sells things which make
+     * a run easier is a different product with different rules attached, and the
+     * player deserves to know which one they are in before they spend anything.
+     */
+    fun drawCosmeticsScreen(
+        state: MenuState,
+        geometry: MenuGeometry,
+        view: CosmeticBrowserView,
+    ) {
+        drawSubScreenHeader(Strings.t("cosmetics"), geometry, state)
+        val layout = geometry.cosmeticsLayout()
+        Widgets.panel(batch, pixel, layout.panelCx, layout.panelCy, layout.panelW, layout.panelH)
+
+        // A swatch of the selected colour, drawn with the same two-tone the
+        // diver sprite uses so the preview is not a lie.
+        val c = view.selected
+        batch.setColor(red(c.bodyColor), green(c.bodyColor), blue(c.bodyColor), 1f)
+        batch.draw(pixel, layout.panelCx - layout.panelW * 0.28f, layout.rowY(0) - layout.rowHeight * 0.4f,
+            layout.panelW * 0.2f, layout.panelW * 0.2f)
+        batch.setColor(red(c.accentColor), green(c.accentColor), blue(c.accentColor), 1f)
+        batch.draw(pixel, layout.panelCx - layout.panelW * 0.2f, layout.rowY(0) - layout.rowHeight * 0.2f,
+            layout.panelW * 0.09f, layout.panelW * 0.09f)
+        batch.setColor(1f, 1f, 1f, 1f)
+
+        font.color = if (view.owned) Color.GOLD else Color.WHITE
+        Widgets.text(batch, font, c.name, layout.panelCx, layout.rowY(1))
+        font.color = if (view.equipped) Color.GREEN else Color(0.7f, 0.8f, 0.9f, 1f)
+        Widgets.text(
+            batch, font,
+            if (view.equipped) Strings.t("equipped")
+            else if (view.owned) Strings.t("equip")
+            else Strings.t("locked"),
+            layout.panelCx,
+            layout.rowY(2),
+        )
+        font.color = Color.WHITE
+
+        Widgets.pill(
+            batch, font, pixel,
+            layout.panelCx - layout.panelW * 0.25f, layout.rowY(3),
+            "<", enabled = true, scale = state.scale.factor,
+        )
+        Widgets.pill(
+            batch, font, pixel,
+            layout.panelCx + layout.panelW * 0.25f, layout.rowY(3),
+            ">", enabled = true, scale = state.scale.factor,
+        )
+        val actionLabel = when {
+            view.equipped -> Strings.t("equipped")
+            view.owned -> Strings.t("equip")
+            else -> Strings.t("buy")
+        }
+        Widgets.pill(
+            batch, font, pixel, layout.panelCx, layout.rowY(3),
+            actionLabel, enabled = view.canAct, scale = state.scale.factor,
+        )
+
+        // Appearance-only notice, stated plainly rather than buried.
+        font.color = Color(0.6f, 0.7f, 0.8f, 1f)
+        Widgets.text(
+            batch, font, Strings.t("cosmeticsHint"),
+            layout.panelCx, layout.rowY(4),
+        )
+        font.color = Color.WHITE
+    }
+
+    private fun red(rgb: Int) = (rgb shr 16 and 0xFF) / 255f
+    private fun green(rgb: Int) = (rgb shr 8 and 0xFF) / 255f
+    private fun blue(rgb: Int) = (rgb and 0xFF) / 255f
+
     fun drawShopScreen(state: MenuState, geometry: MenuGeometry) {
         drawSubScreenHeader(Strings.t("shop"), geometry, state)
         val upgrades = Profile.Upgrade.values()
@@ -337,6 +411,15 @@ class MenuRenderer(
         font.color = Color.WHITE
     }
 }
+
+/** What the cosmetics screen needs to draw, so the renderer never reaches into
+ *  the economy itself. */
+data class CosmeticBrowserView(
+    val selected: com.depthdiver.cosmetic.Cosmetic,
+    val owned: Boolean,
+    val equipped: Boolean,
+    val canAct: Boolean,
+)
 
 /** Slider positions, read once per frame so the drawn percentage and the stored
  *  value cannot disagree. */

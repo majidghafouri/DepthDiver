@@ -49,6 +49,10 @@ object Strings {
         "musicVolume" to "MUSIC VOLUME", "reduceMotion" to "REDUCE MOTION",
         "highContrast" to "HIGH CONTRAST", "screenShake" to "SCREEN SHAKE",
         "on" to "ON", "off" to "OFF",
+        // Cosmetics
+        "cosmetics" to "COSMETICS", "equip" to "EQUIP", "equipped" to "EQUIPPED",
+        "buy" to "BUY", "locked" to "LOCKED",
+        "cosmeticsHint" to "Appearance only - never affects a run",
     )
     
     private val ES = mapOf(
@@ -59,6 +63,9 @@ object Strings {
         "menuTitle" to "DEPTH DIVER", "menuSubtitle" to "sumérgete en el abismo",
         "play" to "JUGAR", "profile" to "PERFIL", "leaderboard" to "CLASIFICACIÓN",
         "shop" to "TIENDA", "back" to "VOLVER", "menu" to "MENÚ", "quit" to "SALIR",
+        "cosmetics" to "ASPECTO", "equip" to "EQUIPAR", "equipped" to "PUESTO",
+        "buy" to "COMPRAR", "locked" to "BLOQUEADO",
+        "cosmeticsHint" to "Solo apariencia - nunca afecta a la partida",
         "pearls" to "PERLAS", "pearlsEarned" to "PERLAS GANADAS", "dives" to "INMERSIONES",
         "newRecord" to "¡NUEVO RÉCORD!", "top5" to "¡TOP 5!", "rank" to "RANGO",
         "noRuns" to "SIN PARTIDAS", "level" to "NIVEL", "buy" to "COMPRAR", "max" to "MÁX",

@@ -181,6 +181,28 @@ class MenuGeometry(
         )
     }
 
+    /** Header, swatch, name, state, arrows plus the hint: six rows. */
+    fun cosmeticsLayout(): SubScreenLayout = subLayout(rows = 6, pillRows = true)
+
+    fun cosmeticsArrows(layout: SubScreenLayout): Pair<MenuRect, MenuRect> {
+        val cy = layout.rowY(3)
+        val w = pillW("<")
+        val h = pillH("<")
+        val left = MenuRect(layout.panelCx - layout.panelW * 0.25f, cy, w, h)
+        val right = MenuRect(layout.panelCx + layout.panelW * 0.25f, cy, w, h)
+        return left to right
+    }
+
+    fun cosmeticsActionPill(layout: SubScreenLayout): MenuRect {
+        val label = Strings.t("equip")
+        return MenuRect(
+            layout.panelCx,
+            layout.rowY(3),
+            pillW(label),
+            pillH(label),
+        )
+    }
+
     fun settingsLayout(): SubScreenLayout = subLayout(rows = Setting.values().size, pillRows = true)
 
     /** Width of the slider track on a settings row. */

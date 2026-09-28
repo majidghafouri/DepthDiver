@@ -60,7 +60,9 @@ class MenuUiTest {
 
     private fun from(r: MenuRect, name: String) = Control(name, r.cx, r.cy, r.w, r.h)
 
-    private val labels = listOf("PLAY", "PROFILE", "LEADERBOARD", "SHOP", "SETTINGS", "MUTE", "QUIT")
+    private val labels = listOf(
+        "PLAY", "PROFILE", "LEADERBOARD", "SHOP", "COSMETICS", "SETTINGS", "MUTE", "QUIT",
+    )
 
     /** Main menu: difficulty segments are tested before the buttons. */
     private fun mainMenuControls(w: Float, h: Float): List<Control> {

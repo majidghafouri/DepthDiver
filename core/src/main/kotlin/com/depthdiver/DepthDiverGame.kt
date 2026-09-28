@@ -27,7 +27,13 @@ import com.depthdiver.game.BackAction
 import com.depthdiver.game.Biome
 import com.depthdiver.game.GamepadBridge
 import com.depthdiver.game.MenuMetrics
+import com.depthdiver.cosmetic.Cosmetic
+import com.depthdiver.cosmetic.Cosmetics
+import com.depthdiver.menu.CosmeticBrowserView
+import com.depthdiver.monet.PurchaseResult
+import com.depthdiver.monet.Purchases
 import com.depthdiver.menu.FontMenuText
+import com.depthdiver.monet.Economy
 import com.depthdiver.world.ParticleView
 import com.depthdiver.world.waterColorAt
 import com.depthdiver.world.WorldRenderer
@@ -239,6 +245,23 @@ class DepthDiverGame : ApplicationAdapter() {
     private lateinit var font: BitmapFont
     private lateinit var titleFont: BitmapFont
     private lateinit var playerTex: Texture
+
+    /**
+     * Repaints the diver in the equipped cosmetic.
+     *
+     * The sprite is two circles, so a cosmetic is two colours and nothing else
+     * -- there is deliberately no stat attached to any of them.
+     */
+    private fun applyCosmetic(cosmetic: Cosmetic) {
+        val pix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
+        pix.setColor(redOf(cosmetic.bodyColor), greenOf(cosmetic.bodyColor), blueOf(cosmetic.bodyColor), 1f)
+        pix.fillCircle(32, 32, 26)
+        pix.setColor(redOf(cosmetic.accentColor), greenOf(cosmetic.accentColor), blueOf(cosmetic.accentColor), 1f)
+        pix.fillCircle(40, 40, 10)
+        if (this::playerTex.isInitialized) playerTex.dispose()
+        playerTex = Texture(pix)
+        pix.dispose()
+    }
     private lateinit var rockTex: Texture
     private lateinit var mineTex: Texture
     private lateinit var jellyfishTex: Texture
@@ -269,6 +292,18 @@ class DepthDiverGame : ApplicationAdapter() {
     private var hudPauseH = 0f
 
     private val audio = AudioManager()
+    private val economy = Economy(Profile.preferences())
+
+    private fun redOf(rgb: Int) = (rgb shr 16 and 0xFF) / 255f
+    private fun greenOf(rgb: Int) = (rgb shr 8 and 0xFF) / 255f
+    private fun blueOf(rgb: Int) = (rgb and 0xFF) / 255f
+
+    /** Equip a cosmetic and repaint the diver, if the player owns it. */
+    private fun equipCosmetic(id: String): Boolean {
+        if (!economy.equip(id)) return false
+        applyCosmetic(economy.equippedCosmetic())
+        return true
+    }
     private var padState = GamepadState()
     private var padPrevious = GamepadState()
     private val performanceMonitor = PerformanceMonitor()
@@ -416,13 +451,7 @@ class DepthDiverGame : ApplicationAdapter() {
         applyUpgrades()
         audio.init()
 
-        val playerPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
-        playerPix.setColor(0.2f, 0.75f, 1f, 1f)
-        playerPix.fillCircle(32, 32, 26)
-        playerPix.setColor(0.1f, 0.45f, 0.7f, 1f)
-        playerPix.fillCircle(40, 40, 10)
-        playerTex = Texture(playerPix)
-        playerPix.dispose()
+        applyCosmetic(economy.equippedCosmetic())
 
         val rockPix = Pixmap(64, 64, Pixmap.Format.RGBA8888)
         rockPix.setColor(0.45f, 0.4f, 0.35f, 1f)
@@ -1609,10 +1638,12 @@ class DepthDiverGame : ApplicationAdapter() {
                 }
             }
 
-            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP, GameState.ACHIEVEMENTS -> {
+            GameState.PROFILE, GameState.LEADERBOARD, GameState.SHOP,
+            GameState.COSMETICS, GameState.ACHIEVEMENTS -> {
                 if (Gdx.input.justTouched()) {
                     when (state) {
                         GameState.SHOP -> handleShopTouch(touchX(), touchY())
+                        GameState.COSMETICS -> handleCosmeticsTouch(touchX(), touchY())
                         GameState.PROFILE -> handleProfileTouch(touchX(), touchY())
                         else -> handleSubScreenTouch(touchX(), touchY())
                     }
@@ -1715,9 +1746,10 @@ class DepthDiverGame : ApplicationAdapter() {
             1 -> dispatch(GameAction.OpenProfile)
             2 -> dispatch(GameAction.OpenLeaderboard)
             3 -> dispatch(GameAction.OpenShop)
-            4 -> dispatch(GameAction.OpenSettings)
-            5 -> audio.toggleMute()
-            6 -> Gdx.app.exit()
+            4 -> dispatch(GameAction.OpenCosmetics)
+            5 -> dispatch(GameAction.OpenSettings)
+            6 -> audio.toggleMute()
+            7 -> Gdx.app.exit()
         }
     }
 
@@ -1772,6 +1804,73 @@ class DepthDiverGame : ApplicationAdapter() {
                 achievementToast = "${Strings.t("claim")} +${Challenge.REWARD}"
                 achievementToastTimer = 2.5f
                 audio.playClick()
+            }
+        }
+    }
+
+    // --- cosmetics ---------------------------------------------------------
+
+    private var cosmeticIndex: Int = 0
+
+    private fun selectedCosmetic(): Cosmetic = Cosmetics.CATALOG[cosmeticIndex % Cosmetics.CATALOG.size]
+
+    private fun cosmeticsView(): CosmeticBrowserView {
+        val c = selectedCosmetic()
+        val owned = economy.owns(c.id)
+        val equipped = economy.equippedCosmetic().id == c.id
+        return CosmeticBrowserView(
+            selected = c,
+            owned = owned,
+            equipped = equipped,
+            canAct = !equipped && (owned || Purchases.service.canPurchase),
+        )
+    }
+
+    private fun handleCosmeticsTouch(tx: Float, ty: Float) {
+        val layout = menu().cosmeticsLayout()
+        val back = menu().backPill()
+        if (Widgets.contains(tx, ty, back.cx, back.cy, back.w, back.h)) {
+            goToMenu()
+            return
+        }
+        val (left, right) = menu().cosmeticsArrows(layout)
+        if (Widgets.containsTouch(tx, ty, left.cx, left.cy, left.w, left.h, uiScale.minTouchPx)) {
+            cosmeticIndex = (cosmeticIndex - 1 + Cosmetics.CATALOG.size) % Cosmetics.CATALOG.size
+            audio.playClick()
+            return
+        }
+        if (Widgets.containsTouch(tx, ty, right.cx, right.cy, right.w, right.h, uiScale.minTouchPx)) {
+            cosmeticIndex = (cosmeticIndex + 1) % Cosmetics.CATALOG.size
+            audio.playClick()
+            return
+        }
+        val action = menu().cosmeticsActionPill(layout)
+        if (!Widgets.containsTouch(tx, ty, action.cx, action.cy, action.w, action.h, uiScale.minTouchPx)) {
+            return
+        }
+        val c = selectedCosmetic()
+        when {
+            // Already worn: a tap must never start a purchase for what is on.
+            economy.equippedCosmetic().id == c.id -> audio.playClick()
+            economy.owns(c.id) -> {
+                if (equipCosmetic(c.id)) {
+                    audio.playClick()
+                    achievementToast = "${Strings.t("equipped")}: ${c.name}"
+                    achievementToastTimer = 2f
+                }
+            }
+            else -> when (val result = economy.buy(c)) {
+                is PurchaseResult.Granted -> {
+                    equipCosmetic(c.id)
+                    audio.playClick()
+                }
+                is PurchaseResult.AlreadyOwned -> equipCosmetic(c.id)
+                // A closed sheet gets no dialog; a failure says why.
+                is PurchaseResult.Cancelled -> Unit
+                is PurchaseResult.Failed -> {
+                    achievementToast = result.reason
+                    achievementToastTimer = 2.5f
+                }
             }
         }
     }
@@ -2027,6 +2126,10 @@ class DepthDiverGame : ApplicationAdapter() {
                             settingEnabled(Setting.SCREEN_SHAKE),
                         ),
                     )
+                }
+                GameState.COSMETICS -> {
+                    renderer.drawBackground(menuState, geometry, menuFbo)
+                    renderer.drawCosmeticsScreen(menuState, geometry, cosmeticsView())
                 }
                 GameState.PLAYING, GameState.PAUSED, GameState.GAME_OVER -> {}
             }
