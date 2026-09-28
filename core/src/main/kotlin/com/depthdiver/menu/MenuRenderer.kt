@@ -436,6 +436,32 @@ class MenuRenderer(
         font.color = Color.WHITE
     }
 
+    /**
+     * The first-dive lines, fading out.
+     *
+     * Two lines, never more, and only on a player's first dive. This is a game
+     * about a quiet ocean; a wall of text over the opening is the wrong first
+     * impression, and anything long enough to need skipping is long enough that
+     * nobody reads it.
+     */
+    fun drawOpeningHints(
+        state: MenuState,
+        geometry: MenuGeometry,
+        hints: List<String>,
+        alpha: Float,
+    ) {
+        if (hints.isEmpty() || alpha <= 0f) return
+        font.color = Color(0.9f, 0.95f, 1f, alpha.coerceIn(0f, 1f))
+        hints.forEachIndexed { i, line ->
+            Widgets.text(
+                batch, font, line,
+                geometry.screenWidth / 2f,
+                geometry.screenHeight * (0.30f - i * 0.06f),
+            )
+        }
+        font.color = Color.WHITE
+    }
+
     fun drawShopScreen(state: MenuState, geometry: MenuGeometry) {
         drawSubScreenHeader(Strings.t("shop"), geometry, state)
         val upgrades = Profile.Upgrade.values()

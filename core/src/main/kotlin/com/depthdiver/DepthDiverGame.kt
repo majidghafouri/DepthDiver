@@ -33,6 +33,7 @@ import com.depthdiver.menu.CosmeticBrowserView
 import com.depthdiver.monet.PurchaseResult
 import com.depthdiver.analytics.AnalyticsReport
 import com.depthdiver.analytics.AnalyticsSettings
+import com.depthdiver.analytics.Opening
 import com.depthdiver.analytics.RunSample
 import com.depthdiver.mutation.HazardFamily
 import com.depthdiver.mutation.MutationDeck
@@ -178,9 +179,6 @@ internal const val BOSS_WARNING_STEP = 0.85f
 internal const val MAX_CURRENT_PUSH = 14f
 
 internal const val BIOME_BANNER_FADE = 0.6f
-
-/** How often a run offers a mutation. Roughly three picks in a deep dive. */
-internal const val MUTATION_EVERY_METERS = 120f
 
 internal fun bossCountdownStep(warningRemaining: Float): Int =
     (3 - (warningRemaining / BOSS_WARNING_STEP).toInt()).coerceIn(1, 3)
@@ -349,6 +347,8 @@ class DepthDiverGame : ApplicationAdapter() {
     private var elapsed = 0f
     private var hazardTimer = 1f
     private var pickupTimer = 2f
+    private var pickupsInRun = 0
+    private var hintTimer = 0f
     private var combo = 1
     private var comboTimer = 0f
     private var maxComboWindow = 5f
@@ -1174,6 +1174,7 @@ class DepthDiverGame : ApplicationAdapter() {
         spawnBubbleParticles(playerX, playerY - playerRadius * 2)
 
         elapsed += delta
+        if (hintTimer > 0f) hintTimer -= delta
         val diff = currentDifficulty()
         val fx = mutationEffects()
         oxygen -= delta * DifficultyCurve.oxygenDrain(diff.drain, depth) * fx.oxygenDrain
@@ -1231,7 +1232,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
         // A milestone is the moment a pick feels earned rather than interrupted.
         if (depth >= nextMilestone) {
-            nextMilestone += 50f
+            nextMilestone += Opening.MILESTONE_STEP_METERS
             offerMutationPick()
         }
 
@@ -1640,10 +1641,15 @@ class DepthDiverGame : ApplicationAdapter() {
         val top = worldViewSpec.worldTop(worldCameraTarget)
         val oxygenFraction = if (maxOxygen > 0f) oxygen / maxOxygen else 0f
         val forceTank = fairness.shouldForceOxygenTank(oxygenFraction, depth)
-        val tank = forceTank || fairness.unit() >= 0.65f
+        // The opening of a run should not be a coin flip. A player who has never
+        // collected anything gets a pearl first, so the first win lands about
+        // two seconds in rather than whenever the dice please.
+        val firstOfRun = pickupsInRun == 0
+        val tank = !firstOfRun && (forceTank || fairness.unit() >= 0.65f)
         val width = if (tank) 1.6f else 1.2f
         val center = fairness.pickupCenter(playerX, width, depth)
         val phase = fairness.range(0f, MathUtils.PI2)
+        pickupsInRun++
         if (tank) {
             pickups.add(Pickup.OxygenTank(Rectangle(center - width / 2f, top + 2.4f, width, width), phase))
         } else {
@@ -1878,7 +1884,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun mutationEffects(): MutationEffects = mutations.effects
 
     /** Depth at which the next pick is offered, and the depth of the last one. */
-    private var nextMutationDepth = MUTATION_EVERY_METERS
+    private var nextMutationDepth = Opening.FIRST_PICK_METERS
     private var lastMutationDepth = 0f
 
     /**
@@ -1890,7 +1896,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private fun offerMutationPick() {
         if (state != GameState.PLAYING) return
         if (depth < nextMutationDepth) return
-        nextMutationDepth += MUTATION_EVERY_METERS
+        nextMutationDepth += Opening.PICK_STEP_METERS
         lastMutationDepth = depth
         dispatch(GameAction.OpenMutationSelect)
     }
@@ -2368,6 +2374,11 @@ class DepthDiverGame : ApplicationAdapter() {
         if (state == GameState.GAME_OVER) {
             drawGameOverOverlay(glyphLayout, hudState.lineHeight)
         }
+        menus().drawOpeningHints(
+            menuState(), menu(),
+            Opening.hintsFor(Profile.dives()),
+            Opening.hintAlpha(hintTimer),
+        )
         if (biomeToastTimer > 0f) drawBiomeBanner()
         if (achievementToastTimer > 0f) drawAchievementToast()
     }
@@ -2689,14 +2700,16 @@ class DepthDiverGame : ApplicationAdapter() {
         pickupTimer = 2f
         // A run's mutations belong to that run.
         mutations.clear()
-        nextMutationDepth = MUTATION_EVERY_METERS
+        nextMutationDepth = Opening.FIRST_PICK_METERS
         lastMutationDepth = 0f
+        pickupsInRun = 0
+        hintTimer = if (Opening.isFirstDive(Profile.dives())) Opening.HINT_SECONDS else 0f
         combo = 1
         comboTimer = 0f
         shieldActive = false
         shieldCooldown = 0f
         runPearls = 0
-        nextMilestone = 50f
+        nextMilestone = Opening.FIRST_MILESTONE_METERS
         bossWarning = 0f
         countdownStep = 0
         biome = Biome.forDepth(0f)
