@@ -22,7 +22,7 @@ notice.
 
 Ordered by leverage, not by effort.
 
-### 1. Per-run mutations — BUILT
+### 1. Per-run mutations — BUILT (`078bec7`)
 Pick 1 of 3 at the start of a run, and again at depth milestones. Each is a
 *rule change*, not a stat increase, so the run becomes a different problem.
 Pearls double but oxygen drains faster; currents push you sideways; jellyfish are
@@ -58,9 +58,14 @@ already stored.
 Shareable seeds are already built and barely used. "Race my exact ocean" is the
 cheapest viral loop available and the plumbing is done.
 
-### 7. Measure before building more — BUILT
-See `analytics/RunAnalytics.kt`. Local-only, no network, and it exists so the
-other six are chosen on evidence rather than on taste.
+### 7. Measure before building more — BUILT (`600f04b`)
+`analytics/RunAnalytics.kt` (exact median + funnel, last 500 runs in memory) and
+`analytics/AnalyticsReport.kt` (running totals that survive, rendered as text).
+Local only, no identifier, no network.
+
+**The number to look at is `typicalStopMeters`** -- the median run's depth, not
+the best. If it is low, proposals 2 and 3 matter more than 4 and 5. Nothing has
+been read from it yet, so none of the remaining proposals are known to be right.
 
 ## The open question: who is this for?
 
