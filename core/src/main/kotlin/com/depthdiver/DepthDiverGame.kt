@@ -94,6 +94,7 @@ import com.depthdiver.run.RunLedger
 import com.depthdiver.run.RunOutcome
 import com.depthdiver.run.StartupRecovery
 import com.depthdiver.run.RunSettlement
+import com.depthdiver.retention.SharedRun
 import com.depthdiver.retention.Streak
 import com.depthdiver.retention.StreakUpdate
 import com.depthdiver.run.DeathLesson
@@ -1835,17 +1836,60 @@ class DepthDiverGame : ApplicationAdapter() {
         }
     }
 
+    /**
+     * Play whatever run the player last copied.
+     *
+     * Reads the clipboard rather than opening a text field: the code arrives by
+     * copy-paste, so a field would add a step and a keyboard for no gain. Only
+     * speaks up when there was something to read, because complaining about an
+     * empty clipboard is just noise.
+     */
+    private fun pasteFriendsRun() {
+        val clipboard = Gdx.app.getClipboard()
+        if (!clipboard.hasContents()) {
+            achievementToast = Strings.t("friendRunEmpty")
+            achievementToastTimer = 2.5f
+            return
+        }
+        when (val invite = SharedRun.fromClipboard(clipboard.getContents())) {
+            SharedRun.Invite.Nothing -> {
+                achievementToast = Strings.t("friendRunEmpty")
+                achievementToastTimer = 2.5f
+            }
+
+            SharedRun.Invite.NotARunCode -> {
+                achievementToast = Strings.t("friendRunBad")
+                achievementToastTimer = 2.5f
+            }
+
+            is SharedRun.Invite.Playable -> {
+                // The code carries its own difficulty, so playing a friend's run
+                // does not silently fight on the settings they played it on.
+                Profile.setDifficulty(invite.difficulty)
+                if (setRunCodeFromFriend(invite.code)) {
+                    startRun()
+                    achievementToast = "${Strings.t("friendRunPlaying")} ${invite.code}"
+                    achievementToastTimer = 3f
+                } else {
+                    achievementToast = Strings.t("friendRunBad")
+                    achievementToastTimer = 2.5f
+                }
+            }
+        }
+    }
+
     private fun engage(index: Int) {
         audio.playClick()
         when (index) {
             0 -> startRun()
-            1 -> dispatch(GameAction.OpenProfile)
-            2 -> dispatch(GameAction.OpenLeaderboard)
-            3 -> dispatch(GameAction.OpenShop)
-            4 -> dispatch(GameAction.OpenCosmetics)
-            5 -> dispatch(GameAction.OpenSettings)
-            6 -> audio.toggleMute()
-            7 -> Gdx.app.exit()
+            1 -> pasteFriendsRun()
+            2 -> dispatch(GameAction.OpenProfile)
+            3 -> dispatch(GameAction.OpenLeaderboard)
+            4 -> dispatch(GameAction.OpenShop)
+            5 -> dispatch(GameAction.OpenCosmetics)
+            6 -> dispatch(GameAction.OpenSettings)
+            7 -> audio.toggleMute()
+            8 -> Gdx.app.exit()
         }
     }
 

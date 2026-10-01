@@ -115,6 +115,10 @@ object Strings {
         "streakDays" to "STREAK",
         "streakLost" to "Streak ended at",
         "streakLabel" to "Day streak",
+        "friendRun" to "FRIEND RUN",
+        "friendRunEmpty" to "Copy a run code from a friend first",
+        "friendRunBad" to "No run code in your clipboard",
+        "friendRunPlaying" to "Playing",
         "challengeDone" to "CHALLENGE COMPLETE",
     )
     
@@ -147,7 +151,11 @@ object Strings {
         "nearMiss" to "solo a",
         "streakDays" to "RACHA",
         "streakLost" to "La racha terminó en",
-        "streakLabel" to "Días de racha", "challengeDone" to "DESAFÍO COMPLETO",
+        "streakLabel" to "Días de racha",
+        "friendRun" to "PARTE DE UN AMIGO",
+        "friendRunEmpty" to "Copia primero el código de un amigo",
+        "friendRunBad" to "No hay ningún código en el portapapeles",
+        "friendRunPlaying" to "Jugando", "challengeDone" to "DESAFÍO COMPLETO",
         "menuTitle" to "DEPTH DIVER", "menuSubtitle" to "sumérgete en el abismo",
         "play" to "JUGAR", "profile" to "PERFIL", "leaderboard" to "CLASIFICACIÓN",
         "shop" to "TIENDA", "back" to "VOLVER", "menu" to "MENÚ", "quit" to "SALIR",

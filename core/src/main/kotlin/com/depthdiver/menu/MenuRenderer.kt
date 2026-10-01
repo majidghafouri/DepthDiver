@@ -123,6 +123,7 @@ class MenuRenderer(
 
     fun menuLabels(state: MenuState): List<String> = listOf(
         Strings.t("play"),
+        Strings.t("friendRun"),
         Strings.t("profile"),
         Strings.t("leaderboard"),
         Strings.t("shop"),

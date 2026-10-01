@@ -176,9 +176,12 @@ class MenuGeometryTest {
             val g = geometry(w, h)
             val scale = UiScale.forScreen(w, h)
             val size = maxOf(min((h / 30f * scale.factor).toInt(), 64), 16)
-            val boxes = (0..6).map { i ->
+            // Every slot, not a sample: the grid grew a ninth button when friend
+            // runs were added, and a guard that stops checking at seven is how an
+            // overlapping button ships.
+            val boxes = (0..8).map { i ->
                 val (cx, cy) = g.menuGridPos(i)
-                val label = if (i == 5) "MUTE" else "BUTTON"
+                val label = if (i == 7) "MUTE" else "BUTTON"
                 val (bw, bh) = pill(label, size, scale)
                 listOf(cx, cy, bw, bh)
             }
