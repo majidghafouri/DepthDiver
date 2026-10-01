@@ -28,6 +28,8 @@ class WorldRenderer(
     private val worldCamera: OrthographicCamera,
     private val font: BitmapFont,
     private val textures: WorldTextures,
+    /** One texture per landmark kind, built at boot alongside the rest. */
+    private val landmarkTextures: Map<com.depthdiver.landmark.Landmark.Kind, com.badlogic.gdx.graphics.Texture>,
 ) {
 
     fun render(state: WorldViewState) {
@@ -41,6 +43,7 @@ class WorldRenderer(
         batch.setColor(1f, 1f, 1f, 1f)
         drawParticles(state)
         drawHazards(state)
+        drawLandmarks(state)
         drawPickups(state)
 
         batch.draw(
@@ -124,6 +127,23 @@ class WorldRenderer(
             }
             batch.setColor(1f, 1f, 1f, 1f)
         }
+    }
+
+    /**
+     * Authored places, drawn behind everything else.
+     *
+     * Before the entities rather than after: a wreck the player passes through
+     * should be behind them, not painted over them.
+     */
+    private fun drawLandmarks(state: WorldViewState) {
+        for (lm in state.landmarks) {
+            val texture = landmarkTextures[lm.kind] ?: continue
+            val x = lm.centerXMeters - lm.widthMeters / 2f
+            val y = -lm.depthMeters
+            batch.setColor(1f, 1f, 1f, if (lm.alreadyFound) 0.75f else 1f)
+            batch.draw(texture, x, y, lm.widthMeters, lm.heightMeters)
+        }
+        batch.setColor(1f, 1f, 1f, 1f)
     }
 
     private fun drawPickups(state: WorldViewState) {

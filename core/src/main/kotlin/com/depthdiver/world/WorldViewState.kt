@@ -48,7 +48,21 @@ data class WorldViewState(
     val playerX: Float,
     val playerY: Float,
     val playerRadius: Float,
-)
+    /** Authored places inside the visible band, in world metres. */
+    val landmarks: List<VisibleLandmark> = emptyList(),
+) {
+    /** A landmark as the renderer needs it: which texture, and where. */
+    data class VisibleLandmark(
+        val id: String,
+        val kind: com.depthdiver.landmark.Landmark.Kind,
+        val centerXMeters: Float,
+        val depthMeters: Float,
+        val widthMeters: Float,
+        val heightMeters: Float,
+        /** Dimmer once found, so a repeat visit reads as "been here". */
+        val alreadyFound: Boolean,
+    )
+}
 
 /**
  * The textures the world is drawn from, grouped so the renderer takes one

@@ -82,6 +82,37 @@ object Profile {
 
     fun dives(): Int = prefs().getInteger("dives", 0)
 
+    // ---------- landmarks ----------
+
+    /**
+     * Landmarks found, as ids.
+     *
+     * Kept as a comma-joined string rather than a set because libGDX's Android
+     * preferences have no string-set type and one blob is a single flush instead
+     * of one per id.
+     */
+    fun foundLandmarks(): Set<String> =
+        prefs().getString("landmarks.found", "")
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
+    fun hasFoundLandmark(id: String): Boolean = foundLandmarks().contains(id)
+
+    /**
+     * Record a landmark as found. Returns false if it was already recorded, so
+     * a reward cannot be claimed twice by passing the same landmark twice.
+     */
+    fun markLandmarkFound(id: String): Boolean {
+        val found = foundLandmarks().toMutableSet()
+        if (!found.add(id)) return false
+        batch { p -> p.putString("landmarks.found", found.sorted().joinToString(",")) }
+        return true
+    }
+
+    fun landmarksFoundCount(): Int = foundLandmarks().size
+
     fun recordDive() {
         val p = prefs()
         p.putInteger("dives", dives() + 1)

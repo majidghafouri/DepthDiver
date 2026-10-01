@@ -142,6 +142,7 @@ class MenuGeometry(
      */
     fun profileLayout(): SubScreenLayout = subLayout(rows = PROFILE_ROWS, pillRows = false)
 
+
     /** Claim button for the daily challenge on the profile screen. */
     fun profileClaimCy(): Float = profileLayout().rowY(PROFILE_ROWS - 1)
 
@@ -271,7 +272,11 @@ class MenuGeometry(
     }
 
     private companion object {
-        /** Six stats, the daily line, the challenge line, then the claim row. */
+        /**
+         * Six stats, the daily line, the challenge line, the landmark line.
+         * The panel does not have room for a twelfth row, which is why landmarks
+         * share one line instead of taking two.
+         */
         const val PROFILE_ROWS = 9
     }
 }

@@ -172,6 +172,7 @@ class MenuRenderer(
         state: MenuState,
         geometry: MenuGeometry,
         showReportLine: Boolean = false,
+        landmarks: LandmarkProgress? = null,
     ) {
         Widgets.text(batch, titleFont, Strings.t("profile"), geometry.screenWidth / 2f, geometry.subScreenTitleCy())
         val back = geometry.backPill()
@@ -215,6 +216,20 @@ class MenuRenderer(
         val chMet = activeCh.met(state.bestDepth, Profile.bestRunPearls(), state.bestScore)
 
         font.color = Color.GOLD
+        // Landmarks, with the next one named. "Next landmark: A Whale Falls" is
+        // the line that gives a number a destination.
+        landmarks?.let { lm ->
+            font.color = Color(0.7f, 0.85f, 0.95f, 1f)
+            Widgets.text(
+                batch, font,
+                "${Strings.t("landmarksFound")} ${lm.found}/${lm.total}" +
+                    if (lm.nextName == null) " - ${Strings.t("landmarksAll")}"
+                    else " - ${Strings.t("landmarksNext")}: ${lm.nextName}",
+                layout.panelCx, layout.rowY(stats.size + 2),
+            )
+        }
+
+        font.color = Color.WHITE
         Widgets.text(
             batch,
             font,
@@ -520,6 +535,14 @@ class MenuRenderer(
         font.color = Color.WHITE
     }
 }
+
+/** Landmark progress for the profile: how many found, and which is next. */
+data class LandmarkProgress(
+    val found: Int,
+    val total: Int,
+    /** Localized name of the next one, or null when they are all found. */
+    val nextName: String?,
+)
 
 /** What the cosmetics screen needs to draw, so the renderer never reaches into
  *  the economy itself. */

@@ -30,11 +30,15 @@ import com.depthdiver.game.MenuMetrics
 import com.depthdiver.cosmetic.Cosmetic
 import com.depthdiver.cosmetic.Cosmetics
 import com.depthdiver.menu.CosmeticBrowserView
+import com.depthdiver.menu.LandmarkProgress
 import com.depthdiver.monet.PurchaseResult
 import com.depthdiver.analytics.AnalyticsReport
 import com.depthdiver.analytics.AnalyticsSettings
 import com.depthdiver.analytics.Opening
 import com.depthdiver.analytics.RunSample
+import com.depthdiver.landmark.Landmark
+import com.depthdiver.landmark.LandmarkArt
+import com.depthdiver.landmark.Landmarks
 import com.depthdiver.mutation.HazardFamily
 import com.depthdiver.mutation.MutationDeck
 import com.depthdiver.mutation.MutationEffects
@@ -413,6 +417,29 @@ class DepthDiverGame : ApplicationAdapter() {
         bestRunPearls = runPearls,
     )
 
+    /**
+     * Landmarks inside the visible band, so the renderer is not handed the whole
+     * catalogue every frame.
+     */
+    private fun visibleLandmarks(): List<WorldViewState.VisibleLandmark> {
+        val spec = worldViewSpec
+        val top = spec.worldTop(worldCameraTarget)
+        val bottom = spec.worldBottom(worldCameraTarget)
+        return Landmarks.ALL
+            .filter { val y = -it.depthMeters; y in bottom..top }
+            .map {
+                WorldViewState.VisibleLandmark(
+                    id = it.id,
+                    kind = it.kind,
+                    centerXMeters = it.centerXMeters,
+                    depthMeters = it.depthMeters,
+                    widthMeters = it.widthMeters,
+                    heightMeters = it.heightMeters,
+                    alreadyFound = Profile.hasFoundLandmark(it.id),
+                )
+            }
+    }
+
     private fun world(): WorldViewState = WorldViewState(
         spec = worldViewSpec,
         camera = worldCameraTarget,
@@ -430,6 +457,7 @@ class DepthDiverGame : ApplicationAdapter() {
         },
         hazards = hazards,
         pickups = pickups,
+        landmarks = visibleLandmarks(),
         playerX = playerX,
         playerY = playerY,
         playerRadius = playerRadius,
@@ -619,7 +647,10 @@ class DepthDiverGame : ApplicationAdapter() {
             angler = anglerTex, vortex = vortexTex, oxygen = oxyTex,
             pearl = pearlTex, fish = fishTex,
         )
-        worldRenderer = WorldRenderer(batch, worldCamera, font, worldTextures!!)
+        // One texture per landmark kind, so the five authored places are drawn
+        // from the same procedural art style as every other prop.
+        val landmarkTextures = Landmark.Kind.values().associateWith { LandmarkArt.textureFor(it) }
+        worldRenderer = WorldRenderer(batch, worldCamera, font, worldTextures!!, landmarkTextures)
         resetWorld()
         recoverStartupRuns()
         Gdx.input.inputProcessor = object : InputAdapter() {
@@ -1229,6 +1260,8 @@ class DepthDiverGame : ApplicationAdapter() {
             spawnPickup()
             pickupTimer = fairness.pickupInterval(3f, 5.5f, diff.pickupMul) * fx.pickupInterval
         }
+
+        checkLandmarkDiscovery()
 
         // A milestone is the moment a pick feels earned rather than interrupted.
         if (depth >= nextMilestone) {
@@ -1943,6 +1976,15 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun selectedCosmetic(): Cosmetic = Cosmetics.CATALOG[cosmeticIndex % Cosmetics.CATALOG.size]
 
+    private fun landmarkProgress(): LandmarkProgress {
+        val next = Landmarks.nextBelow(bestDepth)
+        return LandmarkProgress(
+            found = Profile.landmarksFoundCount(),
+            total = Landmarks.ALL.size,
+            nextName = next?.let { Strings.t(it.nameKey) },
+        )
+    }
+
     private fun cosmeticsView(): CosmeticBrowserView {
         val c = selectedCosmetic()
         val owned = economy.owns(c.id)
@@ -2256,6 +2298,7 @@ class DepthDiverGame : ApplicationAdapter() {
                     renderer.drawProfileScreen(
                         menuState, geometry,
                         showReportLine = AnalyticsSettings.isVisible(),
+                        landmarks = landmarkProgress(),
                     )
                 }
                 GameState.LEADERBOARD -> {
@@ -2646,6 +2689,25 @@ class DepthDiverGame : ApplicationAdapter() {
      * Log how the run went, so the next design decision is made on where players
      * actually stop rather than on a guess. Local only; see `AnalyticsReport`.
      */
+    /**
+     * Announce a landmark the first time the dive reaches it.
+     *
+     * Counted against the deepest depth reached rather than checked per frame,
+     * because a fast descent can pass two between frames and a player should not
+     * lose one to a dropped update. The reward is only granted the first time,
+     * so a repeat visit is a landmark and not a payout.
+     */
+    private fun checkLandmarkDiscovery() {
+        for (lm in Landmarks.reached(depth)) {
+            if (!Profile.markLandmarkFound(lm.id)) continue
+            if (lm.reward > 0) Profile.grantPearls(lm.reward)
+            achievementToast = "${Strings.t("found")} ${Strings.t(lm.nameKey)}" +
+                if (lm.reward > 0) "  +${lm.reward}" else ""
+            achievementToastTimer = 3f
+            audio.playAchieve()
+        }
+    }
+
     private fun recordRunSample(reason: RunTerminalReason, finalScore: Int) {
         AnalyticsReport.record(
             RunSample(
