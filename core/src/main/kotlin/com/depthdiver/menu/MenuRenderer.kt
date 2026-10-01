@@ -173,6 +173,7 @@ class MenuRenderer(
         geometry: MenuGeometry,
         showReportLine: Boolean = false,
         landmarks: LandmarkProgress? = null,
+        streak: StreakProgress? = null,
     ) {
         Widgets.text(batch, titleFont, Strings.t("profile"), geometry.screenWidth / 2f, geometry.subScreenTitleCy())
         val back = geometry.backPill()
@@ -222,9 +223,22 @@ class MenuRenderer(
             font.color = Color(0.7f, 0.85f, 0.95f, 1f)
             Widgets.text(
                 batch, font,
-                "${Strings.t("landmarksFound")} ${lm.found}/${lm.total}" +
-                    if (lm.nextName == null) " - ${Strings.t("landmarksAll")}"
-                    else " - ${Strings.t("landmarksNext")}: ${lm.nextName}",
+                buildString {
+                    append("${Strings.t("landmarksFound")} ${lm.found}/${lm.total}")
+                    append(" - ")
+                    append(
+                        if (lm.nextName == null) Strings.t("landmarksAll")
+                        else "${Strings.t("landmarksNext")}: ${lm.nextName}",
+                    )
+                    // The streak shares the landmark line because the profile has
+                    // no twelfth row, and both are reasons to come back.
+                    streak?.let { st ->
+                        append("  |  ")
+                        append(Strings.t("streakLabel"))
+                        append(" ${st.current}")
+                        st.nextMilestone?.let { append(" (${it - st.current})") }
+                    }
+                },
                 layout.panelCx, layout.rowY(stats.size + 2),
             )
         }
@@ -537,6 +551,17 @@ class MenuRenderer(
 }
 
 /** Landmark progress for the profile: how many found, and which is next. */
+/**
+ * Streak progress for the profile: the current run of days, the best ever, and
+ * the next milestone.
+ */
+data class StreakProgress(
+    val current: Int,
+    val best: Int,
+    /** Day count of the next payout, or null when there is none left. */
+    val nextMilestone: Int?,
+)
+
 data class LandmarkProgress(
     val found: Int,
     val total: Int,

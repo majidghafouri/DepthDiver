@@ -2,7 +2,11 @@ package com.depthdiver
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Preferences
+import com.depthdiver.retention.Streak
+import com.depthdiver.retention.StreakState
+import com.depthdiver.retention.StreakUpdate
 import com.depthdiver.run.RunId
+import com.depthdiver.run.RunTerminalReason
 
 data class ProfileRunEffectResult(
     val applied: Boolean,
@@ -10,6 +14,12 @@ data class ProfileRunEffectResult(
     val dailyAwarded: Boolean,
     val disposition: String,
     val alreadyApplied: Boolean = !newlyApplied,
+    /** Day count after this run, or 0 when the streak did not move. */
+    val streakDays: Int = 0,
+    /** Pearls this run paid for crossing a streak milestone. 0 when none. */
+    val streakReward: Int = 0,
+    /** Milestone day count that paid, or null. */
+    val streakMilestone: Int? = null,
 )
 
 typealias RunProfileEffectResult = ProfileRunEffectResult
@@ -112,6 +122,49 @@ object Profile {
     }
 
     fun landmarksFoundCount(): Int = foundLandmarks().size
+
+    // ---------- streak ----------
+
+    fun streakState(): StreakState = StreakState(
+        current = prefs().getInteger("streak.current", 0),
+        best = prefs().getInteger("streak.best", 0),
+        lastDay = prefs().getInteger("streak.lastDay", 0),
+    )
+
+    fun streak(): Int = streakState().current
+
+    fun bestStreak(): Int = streakState().best
+
+    /**
+     * What the most recent streak record did, so the game can announce it.
+     *
+     * A field rather than part of the settlement result because the settlement
+     * result is returned inside the run machinery and the announcement is a
+     * presentation concern that belongs here.
+     */
+    fun lastStreakUpdate(): StreakUpdate = lastStreakUpdate ?: StreakUpdate.Unchanged
+
+    private var lastStreakUpdate: StreakUpdate? = null
+
+    /**
+     * Record a run against the streak and return what happened.
+     *
+     * Idempotent per day, because the settlement path can be replayed and a
+     * streak that counted the same day twice would be worth farming.
+     */
+    fun recordStreakRun(day: Int, reason: RunTerminalReason): StreakUpdate {
+        val before = streakState()
+        val update = Streak.update(before, day, reason)
+        lastStreakUpdate = update
+        if (update is StreakUpdate.Unchanged) return update
+        val after = Streak.apply(before, day, update)
+        val p = prefs()
+        p.putInteger("streak.current", after.current)
+        p.putInteger("streak.best", after.best)
+        p.putInteger("streak.lastDay", after.lastDay)
+        p.flush()
+        return update
+    }
 
     fun recordDive() {
         val p = prefs()
@@ -217,6 +270,10 @@ object Profile {
         val dailyAwarded = dailyEligible && p.getInteger("dailyDay", 0) != settlementDay
         val dailyAmount = if (dailyAwarded) DAILY_BONUS else 0
         p.putInteger("dives", p.getInteger("dives", 0) + 1)
+        // This is the completed-run path, so the run counts by construction --
+        // abandoned runs settle elsewhere and never reach here. Passed as
+        // COMPLETED rather than threading a reason that is always the same.
+        val streakResult = recordStreakRun(settlementDay, RunTerminalReason.COMPLETED)
         p.putFloat("bestDepth", maxOf(p.getFloat("bestDepth", 0f), safeDepth))
         p.putInteger("bestScore", maxOf(p.getInteger("bestScore", 0), safeScore))
         p.putInteger("bestRunPearls", maxOf(p.getInteger("bestRunPearls", 0), safePearls))
@@ -227,11 +284,25 @@ object Profile {
         }
         writeRunEffect(id, EFFECT_COMPLETED, dailyAwarded, p)
         p.flush()
+        // Milestone pearls go on the same write, so a crash between the streak
+        // moving and the reward landing cannot leave one without the other.
+        val advanced = streakResult as? StreakUpdate.Advanced
+        if (advanced != null && advanced.reward > 0) {
+            p.putInteger("totalPearls", p.getInteger("totalPearls", 0) + advanced.reward)
+            p.putInteger("lifetimePearls", p.getInteger("lifetimePearls", 0) + advanced.reward)
+        }
         return ProfileRunEffectResult(
             applied = true,
             newlyApplied = true,
             dailyAwarded = dailyAwarded,
             disposition = EFFECT_COMPLETED,
+            streakDays = when (streakResult) {
+                is StreakUpdate.Advanced -> streakResult.streak
+                is StreakUpdate.Reset -> streakResult.streak
+                StreakUpdate.Unchanged -> 0
+            },
+            streakReward = advanced?.reward ?: 0,
+            streakMilestone = advanced?.milestone,
         )
     }
 

@@ -112,6 +112,9 @@ object Strings {
         "hintShark" to "Sharks hunt in open water. Stay low.",
         "hintBoss" to "The Deep Keeper telegraphs before it strikes. Watch the tell, not the boss.",
         "nearMiss" to "only",
+        "streakDays" to "STREAK",
+        "streakLost" to "Streak ended at",
+        "streakLabel" to "Day streak",
         "challengeDone" to "CHALLENGE COMPLETE",
     )
     
@@ -141,7 +144,10 @@ object Strings {
         "hintAngler" to "La luz es el cebo. El anzuelo es el gancho.",
         "hintShark" to "Cazan en aguas abiertas. Quédate abajo.",
         "hintBoss" to "El Guardián avisa antes de golpear. Mira la señal, no al jefe.",
-        "nearMiss" to "solo a", "challengeDone" to "DESAFÍO COMPLETO",
+        "nearMiss" to "solo a",
+        "streakDays" to "RACHA",
+        "streakLost" to "La racha terminó en",
+        "streakLabel" to "Días de racha", "challengeDone" to "DESAFÍO COMPLETO",
         "menuTitle" to "DEPTH DIVER", "menuSubtitle" to "sumérgete en el abismo",
         "play" to "JUGAR", "profile" to "PERFIL", "leaderboard" to "CLASIFICACIÓN",
         "shop" to "TIENDA", "back" to "VOLVER", "menu" to "MENÚ", "quit" to "SALIR",

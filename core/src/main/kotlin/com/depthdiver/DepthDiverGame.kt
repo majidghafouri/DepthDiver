@@ -31,6 +31,7 @@ import com.depthdiver.cosmetic.Cosmetic
 import com.depthdiver.cosmetic.Cosmetics
 import com.depthdiver.menu.CosmeticBrowserView
 import com.depthdiver.menu.LandmarkProgress
+import com.depthdiver.menu.StreakProgress
 import com.depthdiver.monet.PurchaseResult
 import com.depthdiver.analytics.AnalyticsReport
 import com.depthdiver.analytics.AnalyticsSettings
@@ -93,6 +94,8 @@ import com.depthdiver.run.RunLedger
 import com.depthdiver.run.RunOutcome
 import com.depthdiver.run.StartupRecovery
 import com.depthdiver.run.RunSettlement
+import com.depthdiver.retention.Streak
+import com.depthdiver.retention.StreakUpdate
 import com.depthdiver.run.DeathLesson
 import com.depthdiver.run.RunTerminalReason
 import kotlin.math.max
@@ -1978,6 +1981,12 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun selectedCosmetic(): Cosmetic = Cosmetics.CATALOG[cosmeticIndex % Cosmetics.CATALOG.size]
 
+    private fun streakProgress(): StreakProgress = StreakProgress(
+        current = Profile.streak(),
+        best = Profile.bestStreak(),
+        nextMilestone = Streak.nextMilestone(Profile.streak()),
+    )
+
     private fun landmarkProgress(): LandmarkProgress {
         val next = Landmarks.nextBelow(bestDepth)
         return LandmarkProgress(
@@ -2301,6 +2310,7 @@ class DepthDiverGame : ApplicationAdapter() {
                         menuState, geometry,
                         showReportLine = AnalyticsSettings.isVisible(),
                         landmarks = landmarkProgress(),
+                        streak = streakProgress(),
                     )
                 }
                 GameState.LEADERBOARD -> {
@@ -2650,6 +2660,36 @@ class DepthDiverGame : ApplicationAdapter() {
     }
 
     /** Copies a terminal result into the live fields the rest of the game reads. */
+    /**
+     * Say something when a streak moves, and only when it moves.
+     *
+     * Announced after the death screen is up rather than during the run, because
+     * a streak that interrupts a dive is a nag and one that greets you on the
+     * way out is a reward. A reset is mentioned once, quietly, and never takes
+     * anything back.
+     */
+    private fun announceStreak() {
+        when (val update = Profile.lastStreakUpdate()) {
+            StreakUpdate.Unchanged -> Unit
+
+            is StreakUpdate.Advanced -> if (update.milestone != null) {
+                achievementToast = "${Strings.t("streakDays")} ${update.streak}  +${update.reward}"
+                achievementToastTimer = 3f
+                audio.playAchieve()
+            }
+
+            is StreakUpdate.Reset -> {
+                val worthMentioning = update.from >= 3
+                achievementToast = if (worthMentioning) {
+                    "${Strings.t("streakLost")} ${update.from}"
+                } else {
+                    ""
+                }
+                achievementToastTimer = if (worthMentioning) 2.5f else 0f
+            }
+        }
+    }
+
     private fun applyOutcome(outcome: RunOutcome?) {
         if (outcome == null) return
         depth = outcome.depth
@@ -2712,6 +2752,7 @@ class DepthDiverGame : ApplicationAdapter() {
         applyOutcome(outcome)
         check(dispatch(GameAction.EndRun))
         audio.playCrash()
+        announceStreak()
     }
 
     /**
