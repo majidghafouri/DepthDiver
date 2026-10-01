@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "DepthDiver"
-include("core", "desktop", "app")
+include("core", "desktop", "app", "tools")

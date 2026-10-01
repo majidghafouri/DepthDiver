@@ -18,27 +18,56 @@
     {
       "id": "SUNLIT_SHALLOWS",
       "minDepth": 0.0,
-      "hazardWeights": { "ROCK": 0.45, "MINE": 0.35, "JELLYFISH": 0.20 }
+      "hazardWeights": {
+        "JELLYFISH": 0.2,
+        "MINE": 0.35,
+        "ROCK": 0.45
+      }
     },
     {
       "id": "TURQUOISE_REEF",
       "minDepth": 60.0,
-      "hazardWeights": { "ROCK": 0.30, "MINE": 0.25, "JELLYFISH": 0.25, "ANGLER": 0.20 }
+      "hazardWeights": {
+        "ANGLER": 0.2,
+        "JELLYFISH": 0.25,
+        "MINE": 0.25,
+        "ROCK": 0.3
+      }
     },
     {
       "id": "MIDNIGHT_ZONE",
       "minDepth": 140.0,
-      "hazardWeights": { "ROCK": 0.20, "MINE": 0.20, "JELLYFISH": 0.20, "EEL": 0.20, "ANGLER": 0.20 }
+      "hazardWeights": {
+        "ANGLER": 0.2,
+        "EEL": 0.2,
+        "JELLYFISH": 0.2,
+        "MINE": 0.2,
+        "ROCK": 0.2
+      }
     },
     {
       "id": "ABYSS",
       "minDepth": 260.0,
-      "hazardWeights": { "ROCK": 0.15, "MINE": 0.20, "JELLYFISH": 0.15, "EEL": 0.20, "ANGLER": 0.15, "VORTEX": 0.15 }
+      "hazardWeights": {
+        "ANGLER": 0.15,
+        "EEL": 0.2,
+        "JELLYFISH": 0.15,
+        "MINE": 0.2,
+        "ROCK": 0.15,
+        "VORTEX": 0.15
+      }
     },
     {
       "id": "HADAL_TRENCH",
       "minDepth": 420.0,
-      "hazardWeights": { "ROCK": 0.10, "MINE": 0.15, "JELLYFISH": 0.10, "EEL": 0.25, "ANGLER": 0.20, "VORTEX": 0.20 }
+      "hazardWeights": {
+        "ANGLER": 0.2,
+        "EEL": 0.25,
+        "JELLYFISH": 0.1,
+        "MINE": 0.15,
+        "ROCK": 0.1,
+        "VORTEX": 0.2
+      }
     }
   ]
 }

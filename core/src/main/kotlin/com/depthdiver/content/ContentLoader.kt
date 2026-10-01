@@ -19,23 +19,49 @@ object ContentLoader {
     /** The game falls back rather than half-loading when it hits this many. */
     private const val MAX_PROBLEMS = 20
 
+    /**
+     * Load for the game: never fails, falls back and explains.
+     *
+     * A bad content file must not cost anyone a playable build, so this returns
+     * something runnable no matter what it is handed.
+     */
     fun load(json: String?): ContentDefinition {
+        val parsed = parse(json)
+        if (!parsed.hasProblems) return parsed
+        val builtIn = parse(ContentSource.BUILT_IN_JSON)
+        return ContentDefinition(
+            biomes = builtIn.biomes,
+            tuning = builtIn.tuning,
+            problems = parsed.problems,
+            isFallback = true,
+        )
+    }
+
+    /**
+     * Parse for a tool, without the fallback.
+     *
+     * The important difference from [load]: this does not paper over a broken
+     * file. An editor that quietly replaced someone's content with built-in
+     * values the moment they typo'd a key would destroy their work, so the
+     * authoring path gets the truth and the game gets the safety net.
+     */
+    fun parse(json: String?): ContentDefinition {
         if (json.isNullOrBlank()) {
-            return fallback("content file was missing or empty")
+            return broken("content file was missing or empty")
         }
         return try {
-            parse(JsonReader().parse(json))
+            parseRoot(JsonReader().parse(json))
         } catch (e: Exception) {
-            fallback("content file is not valid JSON: ${e.message}")
+            broken("content file is not valid JSON: ${e.message}")
         }
     }
 
-    /** Parse, and fall back if anything came back wrong. */
-    private fun parse(root: JsonValue): ContentDefinition {
+    /** Parse, collecting problems rather than acting on them. */
+    private fun parseRoot(root: JsonValue): ContentDefinition {
         val problems = mutableListOf<String>()
 
         if (!root.isObject()) {
-            return fallback("content file's root is not an object")
+            return broken("content file's root is not an object")
         }
         if (root.getInt("version", 0) != 1) {
             problems += "unsupported content version ${root.getInt("version", 0)}, expected 1"
@@ -44,11 +70,21 @@ object ContentLoader {
         val tuning = readTuning(root.get("tuning"), problems)
         val biomes = readBiomes(root.get("biomes"), problems)
 
-        if (problems.isNotEmpty() || problems.size >= MAX_PROBLEMS) {
-            return fallback(problems)
+        if (problems.isEmpty()) {
+            return ContentDefinition(biomes = biomes, tuning = tuning, problems = emptyList())
         }
-        return ContentDefinition(biomes = biomes, tuning = tuning, problems = emptyList())
+        return broken(problems)
     }
+
+    /** A definition carrying problems, with no usable content of its own. */
+    private fun broken(reason: String): ContentDefinition = broken(listOf(reason))
+
+    private fun broken(reasons: List<String>): ContentDefinition = ContentDefinition(
+        biomes = emptyList(),
+        tuning = Tuning.DEFAULT,
+        problems = reasons.take(MAX_PROBLEMS),
+        isFallback = false,
+    )
 
     private fun readTuning(node: JsonValue?, problems: MutableList<String>): Tuning {
         if (node == null || !node.isObject()) {
@@ -185,50 +221,6 @@ object ContentLoader {
             return default
         }
         return v
-    }
-
-    /**
-     * The built-in content, annotated with what went wrong.
-     *
-     * Deliberately not the same value as `ContentDefinition.BUILT_IN`: the caller
-     * needs to know this one is a fallback, and sharing an instance would hide
-     * that.
-     */
-    private fun fallback(reason: String): ContentDefinition = fallback(listOf(reason))
-
-    private fun fallback(reasons: List<String>): ContentDefinition {
-        val builtIn = parseBuiltInQuietly()
-        return ContentDefinition(
-            biomes = builtIn.biomes,
-            tuning = builtIn.tuning,
-            problems = reasons.take(MAX_PROBLEMS),
-            isFallback = true,
-        )
-    }
-
-    /**
-     * Parse the built-in copy without recursing back into [fallback].
-     *
-     * If the constant in this project is itself broken there is nothing left to
-     * fall back to, so this returns the hand-written defaults and says so rather
-     * than looping.
-     */
-    private fun parseBuiltInQuietly(): ContentDefinition {
-        val problems = mutableListOf<String>()
-        val root = try {
-            JsonReader().parse(ContentSource.BUILT_IN_JSON)
-        } catch (e: Exception) {
-            problems += "the built-in content is not valid JSON: ${e.message}"
-            return ContentDefinition(emptyList(), Tuning.DEFAULT, problems, isFallback = true)
-        }
-        val tuning = readTuning(root.get("tuning"), problems)
-        val biomes = readBiomes(root.get("biomes"), problems)
-        return ContentDefinition(
-            biomes = biomes,
-            tuning = tuning,
-            problems = problems,
-            isFallback = problems.isNotEmpty(),
-        )
     }
 
     /** Mirrors `HazardKind` so this file does not have to import game code. */
