@@ -82,9 +82,22 @@
 - [ ] **Blocked:** Web build — `gdx-backend-gwt` needs GWT artifacts that do not resolve here
 
 ### Phase 13: Content Pipeline
-- [ ] Level/biome editor tooling
-- [ ] Data-driven hazard/pickup definitions (JSON)
-- [ ] Procedural generation tuning parameters
+- [x] Data-driven hazard/pickup definitions (JSON) (`a4b32a2`)
+  (`content/content.json`; the built-in fallback is held as a text constant rather
+  than a second Kotlin object, and a test asserts the shipped asset is byte-identical
+  to it. A bad file collects its problems and falls back -- a missing comma in
+  content must not be a crash on a device, and a silent fallback would look exactly
+  like a balance change nobody made. Biome colours stay in code on purpose: they are
+  presentation, and a bad file should change how the game plays, not how deep the sea
+  looks.)
+- [x] Procedural generation tuning parameters (`a4b32a2`)
+  (the eleven curve numbers moved out of `DifficultyCurve` and into the same file, so
+  "make it easier" is an edit rather than an archaeology)
+- [x] Level/biome editor tooling (`b63d114`)
+  (external `tools` module, not in-game: validate, show, init, set, add-hazard,
+  remove-hazard, rename-biome, normalise. Writes through the same loader the game
+  uses, via the strict parse, so a broken file is never silently replaced. Output is
+  generated from the parsed model, so a one-value edit is a one-line diff.)
 
 ### Phase 14: Architecture Refactor
 - [x] Step 1: extract HUD into a renderer driven by an immutable state snapshot

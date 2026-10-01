@@ -102,3 +102,25 @@ product, not a different roadmap.
   paid stat is a different product with different platform rules attached.
 - **Energy timers / loss aversion.** This is a calm game. "Come back in 4 hours"
   is the opposite of the thing being made.
+
+## Built in this pass
+
+- **#3 Landmarks** (`3c4fa8a`) -- five fixed places, one per biome. The world is
+  procedural, which is why it never runs out and also why it is forgettable;
+  landmarks are somewhere to *reach* rather than only a score to beat. Discovery is
+  counted against depth reached rather than tested per frame, so a fast descent
+  cannot skip one.
+- **#4 Death loop** (`e960b57`) -- the death screen named the cause and gave a
+  counter-play, and said how far short of your best the run came. Quitting is
+  deliberately not dressed up as a death.
+- **#5 Streaks** (`7ad4cd1`) -- a break resets the count and nothing else. Pearls
+  already granted stay granted and the best streak is kept forever, because a
+  mechanic that confiscates teaches the player the game holds something from them.
+- **#6 Seed sharing** (`4de0eb3`) -- `setRunCodeFromFriend` existed with no caller,
+  so a shared run could be copied out but never brought back in.
+
+While adding #4, three strings turned out to be referenced but never defined --
+`hintSteer`, `hintPearls`, `challengeDone` -- and had been printing their own key
+names. `Strings.t` falls back to the key, so all three compiled and passed every
+test. `StringsCoverageTest` now reads the source for literal lookups and separately
+enumerates the keys emitted at runtime through variables.
