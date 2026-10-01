@@ -68,4 +68,8 @@ tasks.named<JavaExec>("run") {
     if (OperatingSystem.current().isMacOsX) {
         jvmArgs("-XstartOnFirstThread")
     }
+    // libGDX resolves internal files against the working directory, so the
+    // desktop assets have to be found from here. Without this the desktop build
+    // silently falls back to built-in content while Android does not.
+    workingDir = projectDir
 }

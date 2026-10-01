@@ -62,6 +62,14 @@ android {
             signingConfig = signingConfigs.findByName("release")
         }
     }
+    // The core module owns the content asset, and the Android app packages it.
+    // Without this the file sits in the repo, every test passes, and the game
+    // quietly falls back to built-in values on the device.
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(rootProject.file("core/assets"))
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

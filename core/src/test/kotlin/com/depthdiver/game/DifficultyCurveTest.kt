@@ -43,7 +43,7 @@ class DifficultyCurveTest {
 
     @Test
     fun scrollSpeedCapsOnceTheDiverWouldOtherwiseBeOverrun() {
-        val ceiling = 16f * DifficultyCurve.SCROLL_CEILING_RATIO
+        val ceiling = 16f * DifficultyCurve.tuning.scrollCeilingRatio
         assertEquals(ceiling, DifficultyCurve.scrollSpeed(5.5f, 2.5f, 150f, 16f), 0.0001f)
         assertEquals(ceiling, DifficultyCurve.scrollSpeed(5.5f, 2.5f, 4000f, 16f), 0.0001f)
         assertEquals(ceiling, DifficultyCurve.scrollSpeed(3.9f, 1.6f, 900f, 16f), 0.0001f)
@@ -57,8 +57,8 @@ class DifficultyCurveTest {
             assertTrue(range.minimum > 0f, "interval must stay positive at ${depth}m")
             assertTrue(range.maximum <= previousMaximum + 0.0001f, "frequency must not ease off at ${depth}m")
             assertTrue(
-                range.minimum >= minOf(DifficultyCurve.HAZARD_INTERVAL_FLOOR, range.maximum) - 0.0001f,
-                "interval must respect the ${DifficultyCurve.HAZARD_INTERVAL_FLOOR}s floor at ${depth}m",
+                range.minimum >= minOf(DifficultyCurve.tuning.hazardIntervalFloor, range.maximum) - 0.0001f,
+                "interval must respect the ${DifficultyCurve.tuning.hazardIntervalFloor}s floor at ${depth}m",
             )
             previousMaximum = range.maximum
         }
@@ -88,7 +88,7 @@ class DifficultyCurveTest {
         val deepest = DifficultyCurve.oxygenDrain(0.02f, 5000f)
         assertTrue(shallow > 0.02f)
         assertTrue(deep > shallow)
-        assertTrue(deepest <= 0.02f * (1f + DifficultyCurve.OXYGEN_DRAIN_GAIN) + 0.0001f)
+        assertTrue(deepest <= 0.02f * (1f + DifficultyCurve.tuning.oxygenDrainGain) + 0.0001f)
     }
 
     @Test

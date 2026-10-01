@@ -20,6 +20,9 @@ import com.depthdiver.audio.musicDepthFactor
 import com.depthdiver.common.Particle
 import com.depthdiver.common.Particle.ParticleType
 import com.depthdiver.common.Strings
+import com.depthdiver.content.ContentDefinition
+import com.depthdiver.content.ContentLoader
+import com.depthdiver.content.ContentSource
 import com.depthdiver.entity.Hazard
 import com.depthdiver.entity.Pickup
 import kotlin.ranges.ClosedFloatingPointRange
@@ -371,6 +374,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private val particles = mutableListOf<Particle>()
 
     private var menuTime = 0f
+    private lateinit var content: ContentDefinition
     private var deathLesson: DeathLesson? = null
     private var achievementToast: String? = null
     private var achievementToastTimer = 0f
@@ -656,6 +660,11 @@ class DepthDiverGame : ApplicationAdapter() {
         // One texture per landmark kind, so the five authored places are drawn
         // from the same procedural art style as every other prop.
         val landmarkTextures = Landmark.Kind.values().associateWith { LandmarkArt.textureFor(it) }
+        // Content is loaded once, here, and a bad file is reported rather than
+        // thrown: a missing comma in JSON must not be a crash on a device.
+        content = loadContent()
+        content.problems.forEach { Gdx.app.log("DepthDiver", "content: $it") }
+        DifficultyCurve.use(content.tuning)
         worldRenderer = WorldRenderer(batch, worldCamera, font, worldTextures!!, landmarkTextures)
         resetWorld()
         recoverStartupRuns()
@@ -2762,6 +2771,18 @@ class DepthDiverGame : ApplicationAdapter() {
         startBestScore = Profile.bestScore()
         lifecycle.hold(ledger)
         dispatch(GameAction.StartRun)
+    }
+
+    /**
+     * The content the run generates from.
+     *
+     * Falls back to the built-in copy when the asset is missing or malformed,
+     * which is the whole reason the fallback exists.
+     */
+    private fun loadContent(): ContentDefinition {
+        val file = Gdx.files.internal(ContentSource.ASSET_PATH)
+        val loaded = ContentLoader.load(if (file.exists()) file.readString() else null)
+        return if (loaded.hasProblems) ContentDefinition.BUILT_IN else loaded
     }
 
     private fun restartRun() {
