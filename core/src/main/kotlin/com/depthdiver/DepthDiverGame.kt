@@ -93,6 +93,7 @@ import com.depthdiver.run.RunLedger
 import com.depthdiver.run.RunOutcome
 import com.depthdiver.run.StartupRecovery
 import com.depthdiver.run.RunSettlement
+import com.depthdiver.run.DeathLesson
 import com.depthdiver.run.RunTerminalReason
 import kotlin.math.max
 import kotlin.math.min
@@ -366,6 +367,7 @@ class DepthDiverGame : ApplicationAdapter() {
     private val particles = mutableListOf<Particle>()
 
     private var menuTime = 0f
+    private var deathLesson: DeathLesson? = null
     private var achievementToast: String? = null
     private var achievementToastTimer = 0f
     private var nextMilestone = 50f
@@ -2431,10 +2433,36 @@ class DepthDiverGame : ApplicationAdapter() {
         val box = gameOverBox()
         val tall = screenHeight >= 560f
 
+        // Name the cause rather than just announcing GAME OVER. A death you
+        // cannot name is a death you cannot learn from, and this is the only
+        // moment the player is actually thinking about why.
+        val lesson = deathLesson
         font.color = Color.RED
-        val gameOverStr = "${Strings.t("gameOver")} - ${Strings.t("pressR")}"
+        val gameOverStr = if (lesson != null && lesson.isDeath) {
+            Strings.t(lesson.causeKey)
+        } else {
+            Strings.t("gameOver")
+        }
         glyphLayout.setText(font, gameOverStr)
         font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, box.titleY)
+
+        // The counter-play, and how close the run came. The hint is the whole
+        // point; the near miss is what makes the next dive feel worth starting.
+        if (lesson != null && lesson.isDeath) {
+            var lessonY = box.titleY - 30f
+            lesson.nearMissMeters?.let { gap ->
+                font.color = Color.GOLD
+                val text = "${gap} m ${Strings.t("nearMiss")} ${bestDepth.toInt()} m"
+                glyphLayout.setText(font, text)
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, lessonY)
+                lessonY -= 26f
+            }
+            lesson.hintKey?.let { hintKey ->
+                font.color = Color(0.7f, 0.8f, 0.9f, 1f)
+                glyphLayout.setText(font, Strings.t(hintKey))
+                font.draw(batch, glyphLayout, centerX - glyphLayout.width / 2f, lessonY)
+            }
+        }
 
         if (tall) {
             if (!box.recordY.isNaN()) {
@@ -2654,6 +2682,7 @@ class DepthDiverGame : ApplicationAdapter() {
 
     private fun restartRun() {
         if (!flow.accepts(GameAction.Restart)) return
+        deathLesson = null
         if (state == GameState.PLAYING || state == GameState.PAUSED) {
             if (lifecycle.ledger != null && lifecycle.abandon(depth, score) == null) return
         }

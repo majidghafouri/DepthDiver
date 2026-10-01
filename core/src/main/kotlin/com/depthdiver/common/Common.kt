@@ -77,6 +77,42 @@ object Strings {
         "mutationGilded" to "GILDED", "mutationGildedDesc" to "Pickups 2.5x more often, currents 45% stronger",
         "mutationNomad" to "NOMAD", "mutationNomadDesc" to "Score x1.35, oxygen drains 15% faster",
         "mutationDrift" to "DRIFT", "mutationDriftDesc" to "Currents 2.2x stronger, oxygen drains 20% slower",
+        // Opening hints. These were referenced by Opening.kt but never defined,
+        // so the first-run tips were showing their own key names.
+        "hintSteer" to "Touch the water to swim that way.",
+        "hintPearls" to "Pearls are yours. Collect them.",
+        // Landmarks.
+        "found" to "FOUND",
+        "lmKelp" to "Sunlit Kelp",
+        "lmArch" to "The Reef Arch",
+        "lmWreck" to "The Old Wreck",
+        "lmWhale" to "A Whale Falls",
+        "lmVent" to "The Black Smoker",
+        "landmarksFound" to "Landmarks",
+        "landmarksNext" to "Next",
+        "landmarksAll" to "all found",
+        // Death causes, and what to do about each one. A hint that only restates
+        // the cause teaches nothing, so each says what to actually do.
+        "causeAir" to "OUT OF AIR",
+        "causeHazard" to "HIT SOMETHING",
+        "causeRock" to "HIT A ROCK",
+        "causeMine" to "MINE",
+        "causeJelly" to "JELLYFISH STING",
+        "causeEel" to "EEL",
+        "causeAngler" to "ANGLER",
+        "causeVortex" to "VORTEX",
+        "causeShark" to "SHARK",
+        "causeBoss" to "THE DEEP KEEPER",
+        "hintAir" to "Turn back before the gauge empties. Oxygen upgrades last longer.",
+        "hintRock" to "Rocks are the scenery. Stay in open water.",
+        "hintMine" to "Mines are the only hazard worth the detour. Swear around them.",
+        "hintJelly" to "Jellies drift with the current and sting on contact.",
+        "hintEel" to "Eels are fast. Do not let one follow you.",
+        "hintAngler" to "The light is bait. The lure is the hook.",
+        "hintShark" to "Sharks hunt in open water. Stay low.",
+        "hintBoss" to "The Deep Keeper telegraphs before it strikes. Watch the tell, not the boss.",
+        "nearMiss" to "only",
+        "challengeDone" to "CHALLENGE COMPLETE",
     )
     
     private val ES = mapOf(
@@ -84,6 +120,28 @@ object Strings {
         "pause" to "PAUSA", "resume" to "REANUDAR", "restart" to "REINICIAR",
         "muteOn" to "SILENCIO ON", "muteOff" to "SILENCIO OFF", "paused" to "PAUSADO",
         "gameOver" to "GAME OVER", "pressR" to "pulsa R para reiniciar",
+        "hintSteer" to "Toca el agua para nadar hacia ahi.",
+        "hintPearls" to "Las perlas son tuyas. Recógelas.",
+        "found" to "HALLAZGO",
+        "lmKelp" to "Alga al Sol", "lmArch" to "El Arco del Arrecife",
+        "lmWreck" to "El Pecio Viejo", "lmWhale" to "Cae una Ballena",
+        "lmVent" to "El Fumarol Negro",
+        "landmarksFound" to "Hitos", "landmarksNext" to "Siguiente",
+        "landmarksAll" to "todos encontrados",
+        "causeAir" to "SIN AIRE", "causeHazard" to "GOLPEADO",
+        "causeRock" to "CONTRA UNA ROCA", "causeMine" to "MINA",
+        "causeJelly" to "PICADURA DE MEDUSA", "causeEel" to "ANGUIA",
+        "causeAngler" to "RAPE", "causeVortex" to "VÓRTICE", "causeShark" to "TIBURÓN",
+        "causeBoss" to "EL GUARDIÁN",
+        "hintAir" to "Vuelve antes de que se vacíe la aguja. Las mejoras de oxígeno duran más.",
+        "hintRock" to "Las rocas son el decorado. Quédate en aguas abiertas.",
+        "hintMine" to "Las minas son el único peligro que compensa. Rodea las que veas.",
+        "hintJelly" to "Las medusas van con la corriente y pican al contacto.",
+        "hintEel" to "Las anguilas son rápidas. No dejes que te siga una.",
+        "hintAngler" to "La luz es el cebo. El anzuelo es el gancho.",
+        "hintShark" to "Cazan en aguas abiertas. Quédate abajo.",
+        "hintBoss" to "El Guardián avisa antes de golpear. Mira la señal, no al jefe.",
+        "nearMiss" to "solo a", "challengeDone" to "DESAFÍO COMPLETO",
         "menuTitle" to "DEPTH DIVER", "menuSubtitle" to "sumérgete en el abismo",
         "play" to "JUGAR", "profile" to "PERFIL", "leaderboard" to "CLASIFICACIÓN",
         "shop" to "TIENDA", "back" to "VOLVER", "menu" to "MENÚ", "quit" to "SALIR",
@@ -130,6 +188,7 @@ object Strings {
     fun getCurrentLocale(): String = locales.entries.first { it.value === currentLocale }.key
     
     fun t(key: String): String = currentLocale[key] ?: key
+
 }
 
 data class Particle(
