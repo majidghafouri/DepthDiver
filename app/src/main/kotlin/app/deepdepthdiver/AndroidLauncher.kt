@@ -6,6 +6,7 @@ import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import com.badlogic.gdx.backends.android.AndroidApplication
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration
+import com.depthdiver.CloudSave
 import com.depthdiver.DepthDiverGame
 
 class AndroidLauncher : AndroidApplication() {
@@ -25,15 +26,16 @@ class AndroidLauncher : AndroidApplication() {
         // val gpgsLeaderboard = GpgsLeaderboard(this, leaderboardId)
         // Leaderboard.setCustomImpl(gpgsLeaderboard)
 
-        // TODO: Initialize GPGS cloud save when play-services-games dependency is available
-        // val cloudSave = GpgsCloudSave(this)
-        // CloudSave.setCustomImpl(cloudSave)
-
         initialize(instance, config)
 
         // Notifications read profile state through libGDX Preferences, so this
         // must run after initialize() has published Gdx.app.
         scheduleChallengeNotifications()
+
+        // Cloud save, now that play-services-games actually resolves. Wired after
+        // initialize() because it reads preferences through Gdx.app, and it is
+        // harmless when signed out -- every call checks for an account first.
+        CloudSave.setCustomImpl(GpgsCloudSave(this))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val callback = OnBackInvokedCallback { dispatchBack() }

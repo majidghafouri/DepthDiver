@@ -106,8 +106,12 @@ dependencies {
     implementation("androidx.core:core:1.12.0")
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
-    // TODO: Add Google Play Games Services for online leaderboards
-    // implementation("com.google.android.gms:play-services-games:23.1.0")
+    // Google Play Games Services: Saved Games for cloud save. Resolves via the
+    // Google Maven fallback configured for this machine; the plan previously
+    // recorded this as a Maven Central 404, which was a mirror gap rather than
+    // the artifact being unavailable.
+    implementation("com.google.android.gms:play-services-games:23.1.0")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a")
     natives("com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86")

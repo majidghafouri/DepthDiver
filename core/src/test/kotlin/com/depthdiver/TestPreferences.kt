@@ -26,7 +26,7 @@ class TestPreferences(private val name: String = "test") : Preferences {
     override fun getInteger(key: String): Int = getInteger(key, 0)
     override fun getLong(key: String): Long = getLong(key, 0L)
     override fun getFloat(key: String): Float = getFloat(key, 0f)
-    override fun getString(key: String): String = getString(key, "")
+    override fun getString(key: String): String = getString(key, "") ?: ""
 
     override fun getBoolean(key: String, defValue: Boolean): Boolean =
         store[key] as? Boolean ?: defValue
@@ -40,7 +40,11 @@ class TestPreferences(private val name: String = "test") : Preferences {
     override fun getFloat(key: String, defValue: Float): Float =
         (store[key] as? Number)?.toFloat() ?: defValue
 
-    override fun getString(key: String, defValue: String): String =
+    // Nullable default, matching the platform signature of the real
+    // Preferences. Code that asks whether a key exists passes null to find out,
+    // and a non-null declaration here turned that into an NPE -- which is a bug
+    // in the test double, not in the caller.
+    override fun getString(key: String, defValue: String?): String? =
         store[key] as? String ?: defValue
 
     override fun get(): Map<String, Any?> = store
