@@ -148,6 +148,52 @@ object Strings {
         "hintAngler" to "La luz es el cebo. El anzuelo es el gancho.",
         "hintShark" to "Cazan en aguas abiertas. Quédate abajo.",
         "hintBoss" to "El Guardián avisa antes de golpear. Mira la señal, no al jefe.",
+        // Mutation names and descriptions. The mutation screen is entirely
+        // untranslated otherwise, so a Spanish player saw ten English cards.
+        "mutation" to "MUTACIÓN",
+        "mutationChooseFirst" to "Elige tu primera mutación",
+        "mutationChooseMore" to "Elige otra mutación",
+        "mutationBargain" to "BARATO",
+        "mutationBargainDesc" to "Ganas menos puntos, pero los obstáculos hacen menos daño",
+        "mutationCautious" to "CAUTELOSO",
+        "mutationCautiousDesc" to "Los Supercuentos valen menos y hay menos obstáculos",
+        "mutationIronLungs" to "PULMONES DE HIERRO",
+        "mutationIronLungsDesc" to "El oxígeno se agota un 30% más despacio",
+        "mutationSecondWind" to "SEGUNDO AIRE",
+        "mutationSecondWindDesc" to "Empiezas con aire extra, los puntos x0.8",
+        "mutationDeepLungs" to "PULMONES PROFUNDOS",
+        "mutationDeepLungsDesc" to "El oxígeno se agota un 45% más despacio, las corrientes un 30% más fuertes",
+        "mutationClouds" to "NUBES",
+        "mutationCloudsDesc" to "El doble de objetos, pero el oxígeno se agota un 20% más rápido",
+        "mutationOpenWater" to "AGUA ABIERTA",
+        "mutationOpenWaterDesc" to "Un 70% menos de obstáculos, los puntos x0.75",
+        "mutationThickWater" to "AGUA Densa",
+        "mutationThickWaterDesc" to "Obstáculos más cerca, corrientes un 50% más fuertes, puntos x1.4",
+        "mutationGhostly" to "FANTASMAL",
+        "mutationGhostlyDesc" to "Minas y rocas no terminan la partida, te mueves un 12% más despacio",
+        "mutationJellyproof" to "INMUNE A MEDUSAS",
+        "mutationJellyproofDesc" to "Las medusas no terminan la partida, te mueves un 8% más despacio",
+        "mutationGilded" to "DORADO",
+        "mutationGildedDesc" to "El doble y medio de objetos, corrientes un 45% más fuertes",
+        "mutationNomad" to "NÓMADA",
+        "mutationNomadDesc" to "Puntos x1.35, el oxígeno se agota un 15% más rápido",
+        "mutationDrift" to "DERIVA",
+        "mutationDriftDesc" to "Corrientes 2.2x más fuertes, el oxígeno se agota un 20% más despacio",
+        "mutationGreedy" to "AVARICIOSO",
+        "mutationGreedyDesc" to "Los Supercuentos valen un 60% más, puntos x0.85",
+        // The run report, which was English-only in full.
+        "reportRuns" to "Inmersiones", "reportNoRuns" to "Aún no hay inmersiones",
+        "reportTypicalStop" to "Sueles parar en",
+        "reportBestDepth" to "Mejor profundidad",
+        "reportBestScore" to "Mejor puntuación",
+        "reportAvgDepth" to "Profundidad media",
+        "reportAvgLength" to "Duración media",
+        "reportHazard" to "Lo que suele matar",
+        "reportOxygen" to "sin aire",
+        // The run-history line on the profile.
+        "yourDives" to "TUS INMERSIONES",
+        "yourDivesPrivacy" to "Estos números nunca salen de tu dispositivo",
+        "view" to "VER",
         "nearMiss" to "solo a",
         "streakDays" to "RACHA",
         "streakLost" to "La racha terminó en",
@@ -202,6 +248,39 @@ object Strings {
     fun getCurrentLocale(): String = locales.entries.first { it.value === currentLocale }.key
     
     fun t(key: String): String = currentLocale[key] ?: key
+
+    /**
+     * Each locale's key set, paired with English.
+     *
+     * Exposed so `StringsLocaleTest` can check coverage without hard-coding key
+     * names -- a list in the test would go stale and then quietly stop catching
+     * anything, which is worse than having no test at all.
+     */
+    fun localeKeySets(): Pair<Set<String>, List<Pair<String, Set<String>>>> {
+        val others = locales.filter { it.key != "en" }.map { (name, table) -> name to table.keys }
+        return EN.keys to others
+    }
+
+    /**
+     * Non-English values identical to the English one.
+     *
+     * A translation pasted in as English reads as done in the table and as
+     * English on screen. Returns `key -> "ES"` so a report names both.
+     */
+    fun untranslatedValues(): List<String> = locales.filter { it.key != "en" }.flatMap { (name, table) ->
+        table.filter { (key, value) -> EN[key] == value && isProse(value) }
+            .map { (key, value) -> "$name:$key=\"$value\"" }
+    }
+
+    /**
+     * Whether a value looks like prose worth translating.
+     *
+     * Deliberately narrow: proper nouns, version numbers and single words are
+     * legitimately identical across locales, and flagging them would make this
+     * test noise nobody reads.
+     */
+    private fun isProse(value: String): Boolean =
+        value.length >= 12 && value.contains(' ') && value.none { it.isDigit() }
 
 }
 
