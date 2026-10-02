@@ -71,15 +71,29 @@
 - [x] Cloud save/sync: `CloudSaveService` seam; GPGS Saved Games stubbed (`2aa878b`)
 - [x] Friend challenges / shareable run seeds (`cffa553`)
 - [x] Daily/weekly challenge notifications (`4738a1c`)
-- [ ] **Blocked:** real cloud backends need the `play-services-games` artifact, which
-      404s on Maven Central. The seams are ready; only the dependency is missing.
+- [x] Real cloud backend: Play Games Services Saved Games (`8480783`)
+  (The dependency was never unavailable -- `play-services-games:23.1.0` and its 32
+  transitive artifacts resolve through the Google Maven fallback on this machine.
+  The old note blamed Maven Central, which was a mirror gap. The merge is the
+  point: a snapshot is restored onto a device that has been played on since the
+  upload, so progress takes the better of the two, landmarks union, per-device
+  settings stay put, and the live streak stays local so a copy cannot revive a
+  streak the player let lapse. Uploads re-merge on conflict rather than committing
+  over another device's write.)
 
 ### Phase 12: Platform Polish (PARTIAL)
 - [x] Tablet/landscape optimizations: `UiScale`, scaled fonts/gaps, accessible touch targets (`9bb1c4d`)
 - [x] Controller/gamepad support: pure input mapping + optional runtime bridge (`dcbcd11`)
   - Bridge is inert until `gdx-controllers` is on the classpath (separate artifact, unavailable offline)
 - [ ] iOS build preparation (docs/config)
-- [ ] **Blocked:** Web build — `gdx-backend-gwt` needs GWT artifacts that do not resolve here
+- [ ] **Blocked:** Web build. The artifacts now resolve (`gdx-backend-gwt:1.14.2` plus
+      `gwt-user`/`gwt-dev` 2.11.0, 65 files, once Maven Central is declared alongside
+      the Google mirrors), so the old "unavailable offline" reason was also wrong.
+      The real blocker is different and harder: GWT 2.11 compiles **Java source**,
+      and core is 100% Kotlin with zero `.java` files. GWT cannot consume Kotlin
+      bytecode, so this needs either a Kotlin-to-GWT toolchain, J2CL (no libGDX
+      backend exists for it at any version), or a rewrite of core in Java. That is
+      a porting project, not a dependency change.
 
 ### Phase 13: Content Pipeline
 - [x] Data-driven hazard/pickup definitions (JSON) (`a4b32a2`)
@@ -199,7 +213,8 @@ credentials are missing.
 2. **Phase 12: Platform Polish**
    - [x] Controller/gamepad support: pure input mapping + optional runtime bridge
    - [x] Tablet/landscape optimizations: UiScale, scaled fonts/gaps/offsets, accessible touch targets
-   - [ ] Web build (libGDX HTML5 backend) — blocked: gdx-backend-gwt needs GWT artifacts
+   - [ ] Web build (libGDX HTML5 backend) — blocked: GWT 2.11 compiles Java source
+     only and core is all Kotlin. Artifacts resolve; the toolchain does not apply.
    - [ ] iOS build preparation (docs/config)
 
 4. **Boss Mechanics**
